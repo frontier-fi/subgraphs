@@ -1,21 +1,26 @@
 #!/bin/bash
 
 # Exit on error
-set -e
+set -euo pipefail
+
+if [ "${GITHUB_ACTIONS:-}" != "true" ]; then
+  echo "Error: deploy.sh only runs in GitHub Actions. Use the Deploy workflow (push to main or workflow_dispatch)."
+  exit 1
+fi
 
 # Configuration
 GRAPH_NODE="https://api.subgraph.ormilabs.com/deploy"
 IPFS_NODE="https://api.subgraph.ormilabs.com/ipfs"
 DEPLOY_KEY="${ORMI_DEPLOY_KEY}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-# Check if deploy key is set
 if [ -z "$DEPLOY_KEY" ]; then
-  echo "Error: ORMI_DEPLOY_KEY environment variable is not set"
+  echo "Error: ORMI_DEPLOY_KEY secret is not set"
   exit 1
 fi
 
 # Get the latest git commit hash
-VERSION=$(git rev-parse --short HEAD)
+VERSION=$(git -C "$ROOT" rev-parse --short HEAD)
 
 if [ -z "$VERSION" ]; then
   echo "Error: Failed to get git commit hash"
@@ -47,7 +52,7 @@ if [ -n "$2" ]; then
   echo "Deploying to specific network: ${2}"
 else
   # shellcheck disable=SC2207
-  NETWORKS=($(node -e "console.log(Object.keys(require('./networks.json')).join(' '))"))
+  NETWORKS=($(node -e "console.log(Object.keys(require('${ROOT}/networks.json')).join(' '))"))
   echo "Deploying to all networks from networks.json: ${NETWORKS[*]}"
 fi
 
@@ -59,30 +64,39 @@ FAILED=0
 # Deploy each network
 for network in "${NETWORKS[@]}"; do
   SUBGRAPH_NAME="${SUBGRAPH_TYPE}-${network}"
-
   SUBGRAPH_FILE="subgraph.${network}.yaml"
 
-  if [ ! -f "subgraphs/${SUBGRAPH_TYPE}/$SUBGRAPH_FILE" ]; then
+  if [ ! -f "${ROOT}/subgraphs/${SUBGRAPH_TYPE}/$SUBGRAPH_FILE" ]; then
     echo "Warning: ${SUBGRAPH_FILE} not found, skipping..."
     continue
   fi
 
   echo "Deploying ${SUBGRAPH_NAME}..."
   echo "  Version: ${VERSION}"
-
-  # Deploy the subgraph
   echo "  Deploying..."
-  if (cd "subgraphs/${SUBGRAPH_TYPE}" && npx graph deploy "$SUBGRAPH_NAME" "$SUBGRAPH_FILE" \
+
+  LOG="$(mktemp)"
+  if (cd "${ROOT}/subgraphs/${SUBGRAPH_TYPE}" && npx graph deploy "$SUBGRAPH_NAME" "$SUBGRAPH_FILE" \
     --node "$GRAPH_NODE" \
     --ipfs "$IPFS_NODE" \
     --deploy-key "$DEPLOY_KEY" \
-    --version-label "${VERSION}"); then
+    --version-label "${VERSION}" 2>&1 | tee "$LOG"); then
     echo "  ✓ Successfully deployed ${SUBGRAPH_NAME} ${VERSION}"
+
+    DEPLOYMENT_ID="$(grep -Eo 'Build completed:[[:space:]]*[^[:space:]]+' "$LOG" | awk '{print $3}' | tail -1 || true)"
+
+    node "${ROOT}/scripts/record-deployment.js" \
+      "$SUBGRAPH_NAME" \
+      "$SUBGRAPH_TYPE" \
+      "$network" \
+      "$VERSION" \
+      "${DEPLOYMENT_ID:-}"
   else
     echo "  ✗ Failed to deploy ${SUBGRAPH_NAME}"
     FAILED=1
   fi
 
+  rm -f "$LOG"
   echo ""
 done
 

@@ -4,4 +4,3 @@ subgraphs/*/subgraph.*.yaml
 subgraphs/**/src/types
 .DS_Store
 .vscode
-.env

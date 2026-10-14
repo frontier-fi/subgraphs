@@ -3,8 +3,7 @@
   "private": true,
   "scripts": {
     "codegen": "graph codegen --output-dir src/types/",
-    "build": "graph build",
-    "deploy": "graph deploy"
+    "build": "graph build"
   },
   "dependencies": {
     "@graphprotocol/graph-cli": "0.98.1",
