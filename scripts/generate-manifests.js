@@ -27,7 +27,7 @@ function replacePlaceholders(template, network, networkData) {
   return result + '\n';
 }
 
-['v3-pools', 'v3-vault'].forEach(subgraph => {
+['pools', 'vault'].forEach(subgraph => {
   const templatePath = path.join('subgraphs', subgraph, 'template.yaml');
   
   if (!fs.existsSync(templatePath)) {
@@ -38,10 +38,10 @@ function replacePlaceholders(template, network, networkData) {
   const template = fs.readFileSync(templatePath, 'utf8');
   Object.entries(networksData).forEach(([network, networkData]) => {
     const config = replacePlaceholders(template, network, networkData);
-    const outputPath = path.join('subgraphs', subgraph, `subgraph${network === 'mainnet' ? '' : `.${network}`}.yaml`);
+    const outputPath = path.join('subgraphs', subgraph, `subgraph.${network}.yaml`);
     fs.writeFileSync(outputPath, config);
     console.log(`Generated ${outputPath}`);
   });
 });
 
-console.log('🎉 v3 subgraphs successfully generated\n');
+console.log('🎉 subgraphs successfully generated\n');

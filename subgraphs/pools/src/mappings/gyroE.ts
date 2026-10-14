@@ -1,8 +1,8 @@
 import { Address, Bytes, log } from "@graphprotocol/graph-ts";
 
 import { createBasePool, PoolType } from "./common";
-import { PoolCreated } from "../types/GyroECLPPoolFactory/BasePoolFactory";
-import { GyroECLPPool } from "../types/GyroECLPPoolFactory/GyroECLPPool";
+import { PoolCreated } from "../types/GyroECLPPoolV2Factory/BasePoolFactory";
+import { GyroECLPPool } from "../types/GyroECLPPoolV2Factory/GyroECLPPool";
 import { GyroEParams } from "../types/schema";
 import {
   EclpRawParams,
@@ -126,14 +126,6 @@ function createGyroEPool(
   let pool = createBasePool(poolAddress, factoryAddress, PoolType.GyroE, version);
   pool.gyroEParams = saveGyroEParams(poolAddress, raw);
   pool.save();
-}
-
-export function handleGyroEPoolCreated(event: PoolCreated): void {
-  createGyroEPool(
-    event.params.pool,
-    event.address, // Factory
-    1
-  );
 }
 
 export function handleGyroEV2PoolCreated(event: PoolCreated): void {

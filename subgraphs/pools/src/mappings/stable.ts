@@ -1,8 +1,8 @@
 import { Address, Bytes } from "@graphprotocol/graph-ts";
 
 import { handlePoolCreated, PoolType } from "./common";
-import { PoolCreated } from "../types/StablePoolV2Factory/BasePoolFactory";
-import { StablePool } from "../types/StablePoolV2Factory/StablePool";
+import { PoolCreated } from "../types/StablePoolV3Factory/BasePoolFactory";
+import { StablePool } from "../types/StablePoolV3Factory/StablePool";
 import { StableParams } from "../types/schema";
 
 function handleStablePoolParams(poolAddress: Address): Bytes {
@@ -16,17 +16,6 @@ function handleStablePoolParams(poolAddress: Address): Bytes {
   }
   stableParams.save();
   return stableParams.id;
-}
-
-export function handleStablePoolCreated(event: PoolCreated): void {
-  handlePoolCreated(
-    event.params.pool,
-    event.address, // Factory
-    PoolType.Stable,
-    1,
-    handleStablePoolParams,
-    "stableParams"
-  );
 }
 
 export function handleStablePoolV2Created(event: PoolCreated): void {

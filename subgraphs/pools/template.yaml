@@ -1,0 +1,131 @@
+specVersion: 1.0.0
+indexerHints:
+  prune: never
+schema:
+  file: ./schema.graphql
+dataSources:
+  {{#if WeightedPoolV2Factory}}
+  - kind: ethereum
+    name: WeightedPoolV2Factory
+    network: {{ network }}
+    source:
+      abi: BasePoolFactory
+      address: "{{ WeightedPoolV2Factory.address }}"
+      startBlock: {{ WeightedPoolV2Factory.startBlock }}
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Factory
+        - Pool
+      abis:
+        - name: WeightedPool
+          file: ./abis/WeightedPool.json
+        - name: BasePoolFactory
+          file: ./abis/BasePoolFactory.json
+      eventHandlers:
+        - event: PoolCreated(indexed address)
+          handler: handleWeightedPoolV2Created
+      file: ./src/mappings/weighted.ts
+  {{/if}}
+  {{#if StablePoolV2Factory}}
+  - kind: ethereum
+    name: StablePoolV2Factory
+    network: {{ network }}
+    source:
+      abi: BasePoolFactory
+      address: "{{ StablePoolV2Factory.address }}"
+      startBlock: {{ StablePoolV2Factory.startBlock }}
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Factory
+        - Pool
+      abis:
+        - name: StablePool
+          file: ./abis/StablePool.json
+        - name: BasePoolFactory
+          file: ./abis/BasePoolFactory.json
+      eventHandlers:
+        - event: PoolCreated(indexed address)
+          handler: handleStablePoolV2Created
+      file: ./src/mappings/stable.ts
+  {{/if}}
+  {{#if StablePoolV3Factory}}
+  - kind: ethereum
+    name: StablePoolV3Factory
+    network: {{ network }}
+    source:
+      abi: BasePoolFactory
+      address: "{{ StablePoolV3Factory.address }}"
+      startBlock: {{ StablePoolV3Factory.startBlock }}
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Factory
+        - Pool
+      abis:
+        - name: StablePool
+          file: ./abis/StablePool.json
+        - name: BasePoolFactory
+          file: ./abis/BasePoolFactory.json
+      eventHandlers:
+        - event: PoolCreated(indexed address)
+          handler: handleStablePoolV3Created
+      file: ./src/mappings/stable.ts
+  {{/if}}
+  {{#if Gyro2CLPPoolFactory}}
+  - kind: ethereum
+    name: Gyro2CLPPoolFactory
+    network: {{ network }}
+    source:
+      abi: BasePoolFactory
+      address: "{{ Gyro2CLPPoolFactory.address }}"
+      startBlock: {{ Gyro2CLPPoolFactory.startBlock }}
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Factory
+        - Pool
+      abis:
+        - name: Gyro2CLPPool
+          file: ./abis/Gyro2CLPPool.json
+        - name: BasePoolFactory
+          file: ./abis/BasePoolFactory.json
+      eventHandlers:
+        - event: PoolCreated(indexed address)
+          handler: handleGyro2PoolCreated
+      file: ./src/mappings/gyro2.ts
+  {{/if}}
+  {{#if GyroECLPPoolV2Factory}}
+  - kind: ethereum
+    name: GyroECLPPoolV2Factory
+    network: {{ network }}
+    source:
+      abi: BasePoolFactory
+      address: "{{ GyroECLPPoolV2Factory.address }}"
+      startBlock: {{ GyroECLPPoolV2Factory.startBlock }}
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Factory
+        - Pool
+      abis:
+        - name: GyroECLPPool
+          file: ./abis/GyroECLPPool.json
+        - name: BasePoolFactory
+          file: ./abis/BasePoolFactory.json
+      eventHandlers:
+        - event: PoolCreated(indexed address)
+          handler: handleGyroEV2PoolCreated
+      file: ./src/mappings/gyroE.ts
+  {{/if}}

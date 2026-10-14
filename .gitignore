@@ -1,15 +1,7 @@
-generated
 build
-dist
 node_modules
-package-lock.json
-pnpm-lock.yaml
-# subgraph.yaml
-# subgraph*.yaml
+subgraphs/*/subgraph.*.yaml
 subgraphs/**/src/types
-subgraphs/*/node_modules
-.DS_STORE
-.pnp.*
-**/tests/.*/
+.DS_Store
 .vscode
 .env

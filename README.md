@@ -1,76 +1,73 @@
 # Balancer v3 Subgraphs
 
-This repository contains the subgraph implementations for Balancer v3, including pools and vault subgraphs. It's structured as a monorepo using pnpm workspaces.
+pnpm monorepo with Balancer v3 vault and pools subgraphs, deployed to Ormi.
 
 ## Prerequisites
 
-- Node.js (v18 or later)
-- pnpm (v7 or later)
+- Node.js 22+
+- pnpm 12+
 
 ## Setup
 
-1. Install dependencies:
+```bash
+pnpm install
+pnpm generate-manifests
+pnpm codegen
+```
 
-   ```
-   pnpm install
-   ```
+Or in one shot (install + manifests + codegen + all network builds):
 
-2. Generate manifests:
-
-   ```
-   pnpm generate-manifests
-   ```
-
-   Note: Subgraph manifests (subgraph.yaml) define the smart contracts to index and how to map event data to entities.
-
-3. Generate types for all subgraphs:
-
-   ```
-   pnpm codegen
-   ```
-
-   Note: Codegen creates AssemblyScript classes for each smart contract ABI in subgraph.yaml.
+```bash
+pnpm build:all
+```
 
 ## Development
 
-### Working on a Specific Subgraph
-
-To run commands for a specific subgraph:
-
-```
-pnpm pools <command>  # For pools subgraph
-pnpm vault <command>  # For vault subgraph
+```bash
+pnpm pools <command>  # e.g. pnpm pools build
+pnpm vault <command>  # e.g. pnpm vault build
 ```
 
-For example, to build the pools subgraph:
-
-```
-pnpm pools build
-```
-
-### Extending the Subgraphs
-
-As Balancer expands to new networks or introduces new pool types, you may need to extend the subgraphs. We've provided detailed documentation to guide you through these processes:
-
-- [Adding Support for New Pool Types](docs/new-pool-types.md)
-  If you're building your own pools on Balancer and want to integrate them with the subgraph, this provides a step-by-step guide on how to extend the subgraph to support your new pool type. This ensures that your pool is integrated with Balancer's infraestructure.
-- [Adding Support for New Networks](docs/support-new-networks.md)
-  This guide walks you through the process of adding a new network to the subgraph. It covers updating the `networks.json` file, modifying the GitHub Actions workflow, and generating the necessary manifests.
+Contract addresses live in `networks.json`. Manifests (`subgraph*.yaml`) are generated from `subgraphs/*/template.yaml` via `pnpm generate-manifests` and are gitignored — always regenerate before build/deploy.
 
 ## Deployment
 
-Deployment is handled automatically by GitHub Actions when pushing to the `main` branch. The workflow will:
+Deploys go to [Ormi](https://ormilabs.com) via `@graphprotocol/graph-cli`. Subgraph names follow `{vault|pools}-{network}` (e.g. `vault-mainnet`, `pools-sepolia`). The version label is the short git SHA.
 
-1. Generate manifests for all subgraphs
-2. Generate code for all subgraphs
-3. Build and deploy each subgraph to The Graph's hosted service
+### CI
 
-To deploy manually, ensure you have the necessary credentials and run:
+GitHub Actions (`.github/workflows/deploy.yml`) deploys on merge to `main` (when subgraphs / `networks.json` / scripts change), or via manual workflow dispatch. Requires the `ORMI_DEPLOY_KEY` secret.
 
-```
-pnpm pools build
-pnpm pools deploy
+### Local
 
-pnpm vault build
-pnpm vault deploy
-```
+1. Create an API key in the Ormi dashboard and export it:
+
+   ```bash
+   export ORMI_DEPLOY_KEY=your_key_here
+   ```
+
+2. Build first (same as CI):
+
+   ```bash
+   pnpm install
+   pnpm generate-manifests
+   pnpm codegen
+   pnpm vault build subgraph.mainnet.yaml   # or subgraph.sepolia.yaml
+   pnpm pools build subgraph.mainnet.yaml
+   ```
+
+3. Deploy with `scripts/deploy.sh`:
+
+   ```bash
+   # usage: bash scripts/deploy.sh <vault|pools> [network]
+   # network: mainnet | sepolia  (omit for all)
+
+   bash scripts/deploy.sh vault sepolia
+   bash scripts/deploy.sh pools sepolia
+
+   # all networks for one subgraph
+   bash scripts/deploy.sh vault
+   bash scripts/deploy.sh pools
+   ```
+
+The script runs `graph deploy` against Ormi’s node/IPFS endpoints (`api.subgraph.ormilabs.com`). Prefer sepolia for smoke tests before mainnet.

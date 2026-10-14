@@ -27,43 +27,28 @@ echo ""
 
 # Get subgraph type (required) and network (optional)
 if [ -z "$1" ]; then
-  echo "Error: Subgraph type is required (v3-vault or v3-pools)"
+  echo "Error: Subgraph type is required (vault or pools)"
   exit 1
 fi
 
 SUBGRAPH_TYPE="$1"
 
-if [ "$SUBGRAPH_TYPE" != "v3-vault" ] && [ "$SUBGRAPH_TYPE" != "v3-pools" ]; then
-  echo "Error: Invalid subgraph type. Must be 'v3-vault' or 'v3-pools'"
+if [ "$SUBGRAPH_TYPE" != "vault" ] && [ "$SUBGRAPH_TYPE" != "pools" ]; then
+  echo "Error: Invalid subgraph type. Must be 'vault' or 'pools'"
   exit 1
 fi
 
 echo "Deploying ${SUBGRAPH_TYPE} subgraphs..."
 echo ""
 
-# List of networks to deploy
+# List of networks to deploy (from networks.json when not specified)
 if [ -n "$2" ]; then
-  # Use the network provided as second argument
   NETWORKS=("$2")
   echo "Deploying to specific network: ${2}"
 else
-  # Deploy to all networks
-  NETWORKS=(
-    "mainnet"
-    "polygon"
-    "arbitrum-one"
-    "gnosis"
-    "optimism"
-    "avalanche"
-    "polygon-zkevm"
-    "base"
-    "sonic"
-    "hyperevm"
-    "plasma"
-    "xlayer"
-    "monad"
-    "sepolia"
-  )
+  # shellcheck disable=SC2207
+  NETWORKS=($(node -e "console.log(Object.keys(require('./networks.json')).join(' '))"))
+  echo "Deploying to all networks from networks.json: ${NETWORKS[*]}"
 fi
 
 echo "Deploying with version ${VERSION}..."
@@ -73,16 +58,10 @@ FAILED=0
 
 # Deploy each network
 for network in "${NETWORKS[@]}"; do
-  SUBGRAPH_NAME="${SUBGRAPH_TYPE}-${network}-smol"
+  SUBGRAPH_NAME="${SUBGRAPH_TYPE}-${network}"
 
-  # Use subgraph.yaml for mainnet, otherwise use network-specific file
-  if [ "$network" = "mainnet" ]; then
-    SUBGRAPH_FILE="subgraph.yaml"
-  else
-    SUBGRAPH_FILE="subgraph.${network}.yaml"
-  fi
+  SUBGRAPH_FILE="subgraph.${network}.yaml"
 
-  # Check if subgraph file exists
   if [ ! -f "subgraphs/${SUBGRAPH_TYPE}/$SUBGRAPH_FILE" ]; then
     echo "Warning: ${SUBGRAPH_FILE} not found, skipping..."
     continue

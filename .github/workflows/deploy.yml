@@ -1,0 +1,89 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "subgraphs/**"
+      - "networks.json"
+      - "scripts/**"
+  workflow_dispatch:
+    inputs:
+      subgraph:
+        description: "Choose subgraph"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - vault
+          - pools
+      network:
+        description: "Choose network"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - mainnet
+          - sepolia
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: graph
+    env:
+      ORMI_DEPLOY_KEY: ${{ secrets.ORMI_DEPLOY_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 12
+
+      - name: Install node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install
+
+      - name: Generate manifests
+        run: pnpm generate-manifests
+
+      - name: Resolve deploy targets
+        id: targets
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            SUBGRAPH="${{ inputs.subgraph }}"
+            NETWORK="${{ inputs.network }}"
+          else
+            SUBGRAPH="all"
+            NETWORK="all"
+          fi
+
+          if [ "$SUBGRAPH" = "all" ]; then
+            echo "subgraphs=vault pools" >> "$GITHUB_OUTPUT"
+          else
+            echo "subgraphs=$SUBGRAPH" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "network=$NETWORK" >> "$GITHUB_OUTPUT"
+
+      - name: Codegen, build, and deploy
+        run: |
+          set -e
+          NETWORK="${{ steps.targets.outputs.network }}"
+          for subgraph in ${{ steps.targets.outputs.subgraphs }}; do
+            echo "::group::${subgraph}"
+            (cd "subgraphs/${subgraph}" && pnpm codegen subgraph.sepolia.yaml)
+            if [ "$NETWORK" = "all" ]; then
+              bash scripts/deploy.sh "${subgraph}"
+            else
+              bash scripts/deploy.sh "${subgraph}" "$NETWORK"
+            fi
+            echo "::endgroup::"
+          done

@@ -2,14 +2,11 @@
   "name": "balancer-v3-subgraphs",
   "private": true,
   "scripts": {
-    "update-block-numbers": "node scripts/update-block-numbers.js",
     "generate-manifests": "node scripts/generate-manifests.js",
-    "pools": "pnpm --filter @subgraphs/v3-pools",
-    "vault": "pnpm --filter @subgraphs/v3-vault",
-    "codegen": "pnpm -r codegen subgraph.sepolia.yaml"
-  },
-  "devDependencies": {
-    "js-yaml": "^4.1.0"
+    "pools": "pnpm --filter @subgraphs/pools",
+    "vault": "pnpm --filter @subgraphs/vault",
+    "codegen": "pnpm -r codegen subgraph.sepolia.yaml",
+    "build:all": "bash scripts/build-all.sh"
   },
   "prettier": {
     "trailingComma": "es5"

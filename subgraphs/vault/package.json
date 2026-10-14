@@ -1,0 +1,13 @@
+{
+  "name": "@subgraphs/vault",
+  "private": true,
+  "scripts": {
+    "codegen": "graph codegen --output-dir src/types/",
+    "build": "graph build",
+    "deploy": "graph deploy"
+  },
+  "dependencies": {
+    "@graphprotocol/graph-cli": "0.98.1",
+    "@graphprotocol/graph-ts": "0.38.2"
+  }
+}
