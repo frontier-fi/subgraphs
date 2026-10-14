@@ -88,10 +88,19 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: Upload deployments.json
+      - name: Print deployments
         if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: deployments
-          path: deployments.json
-          if-no-files-found: ignore
+        run: |
+          if [ ! -f deployments.json ]; then
+            echo "No successful deployments to report."
+            echo "No successful deployments to report." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          cat deployments.json
+          {
+            echo "## Deployments"
+            echo ""
+            echo '```json'
+            cat deployments.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

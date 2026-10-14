@@ -116,5 +116,5 @@ done
 
 echo "Deployment summary (${SUBGRAPH_TYPE}): ${SUCCEEDED} succeeded, ${FAILED} skipped/failed, ${SKIPPED} missing manifest"
 echo "Deployment complete!"
-# Always succeed so remaining targets (and the artifact upload) still run.
+# Always succeed so remaining targets (and the summary step) still run.
 exit 0
