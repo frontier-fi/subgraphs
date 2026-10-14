@@ -33,15 +33,6 @@ Deploys only run in CI (`.github/workflows/deploy.yml`) — not locally. Trigger
 - push to `main` when `subgraphs/**`, `networks.json`, or `scripts/**` change
 - manual **workflow_dispatch** (pick subgraph + network, or `all`)
 
-Requires the `ORMI_DEPLOY_KEY` repo secret. Per-target deploy failures (version already exists, plan limit, etc.) are warned and skipped so the rest of the matrix still runs; download the `deployments` artifact for what succeeded.
+Requires the `ORMI_DEPLOY_KEY` repo secret. Per-target deploy failures (version already exists, plan limit, etc.) are warned and skipped so the rest of the matrix still runs. Successful deploys are printed in the job log and Summary (endpoints / query URLs).
 
 Subgraph names: `{vault|pools}-{network}` (e.g. `vault-sepolia`). Version label: short git SHA.
-
-After a run, download the `deployments` artifact for `deployments.json` (`latest` + `history`) with:
-
-```
-https://api.subgraph.ormilabs.com/api/public/<accountId>/subgraphs/<name>/<version>/gn
-https://api.subgraph.ormilabs.com/api/public/<accountId>/subgraphs/<name>/latest/gn
-https://api.subgraph.ormilabs.com/api/public/query_deployment?subgraph_id=<id>
-https://api.subgraph.ormilabs.com/api/subgraph/ipfs/cat?arg=<id>
-```

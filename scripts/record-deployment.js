@@ -31,7 +31,7 @@ const entry = {
   deployedAt: new Date().toISOString(),
 };
 
-let data = { latest: {}, history: [] };
+let data = {};
 if (fs.existsSync(file)) {
   try {
     data = JSON.parse(fs.readFileSync(file, "utf8"));
@@ -39,11 +39,9 @@ if (fs.existsSync(file)) {
     // start fresh if corrupt
   }
 }
-if (!data.latest || typeof data.latest !== "object") data.latest = {};
-if (!Array.isArray(data.history)) data.history = [];
+if (!data || typeof data !== "object" || Array.isArray(data)) data = {};
 
-data.latest[name] = entry;
-data.history.push(entry);
+data[name] = entry;
 
 fs.writeFileSync(file, JSON.stringify(data, null, 2) + "\n");
 console.log(`Recorded ${name}`);
