@@ -87,3 +87,11 @@ jobs:
             fi
             echo "::endgroup::"
           done
+
+      - name: Upload deployments.json
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: deployments
+          path: deployments.json
+          if-no-files-found: ignore
