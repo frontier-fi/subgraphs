@@ -1,52 +1,8 @@
 {
-  "mainnet": {
-    "Vault": {
-      "address": "0xbA1333333333a1BA1108E8412f11850A5C319bA9",
-      "startBlock": 21332121,
-      "storeEventsFrom": "25144166"
-    },
-    "Gyro2CLPPoolFactory": {
-      "address": "0xb96524227c4B5Ab908FC3d42005FE3B07abA40E9",
-      "startBlock": 22188963
-    },
-    "GyroECLPPoolV2Factory": {
-      "address": "0x04d584195a96DFfc7F8B695aA3C9D3c1606b69d1",
-      "startBlock": 24349783
-    },
-    "WeightedPoolV2Factory": {
-      "address": "0x332694Ef46D880DF6Ea9593e04CB8ABEE5F81D99",
-      "startBlock": 24249675
-    },
-    "StablePoolV3Factory": {
-      "address": "0x4eFcd8bcE8AC9b94bd76648e2c85bEf6c40F3228",
-      "startBlock": 24249915
-    }
-  },
   "sepolia": {
     "Vault": {
-      "address": "0xbA1333333333a1BA1108E8412f11850A5C319bA9",
-      "startBlock": 7212247,
-      "storeEventsFrom": "10892137"
-    },
-    "StablePoolV2Factory": {
-      "address": "0xc274A11E09a3c92Ac64eAff5bEC4ee8f5dfEe207",
-      "startBlock": 7944011
-    },
-    "Gyro2CLPPoolFactory": {
-      "address": "0x38ce8e04EBC04A39BED4b097e8C9bb8Ca74e33d8",
-      "startBlock": 8042511
-    },
-    "GyroECLPPoolV2Factory": {
-      "address": "0x29319cC611A086D177bA8784320Cd1dB6Ca7E0D6",
-      "startBlock": 10157230
-    },
-    "WeightedPoolV2Factory": {
-      "address": "0xc383B240B40660cca6c5b6Fbf4fbAb85E9F4de24",
-      "startBlock": 10058578
-    },
-    "StablePoolV3Factory": {
-      "address": "0x472FAE37a8A05474fDe0CcfF6d239719f8881fF5",
-      "startBlock": 10058789
+      "address": "0xFF00009C1A83Ec25434522ef355b99e9a70000FF",
+      "startBlock": 11940608
     }
   }
 }
