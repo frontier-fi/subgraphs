@@ -1,8 +1,8 @@
 import { Address, BigDecimal, Bytes } from "@graphprotocol/graph-ts";
 
 import { handlePoolCreated, PoolType } from "./common";
-import { PoolCreated } from "../types/WeightedPoolV2Factory/BasePoolFactory";
-import { WeightedPool } from "../types/WeightedPoolV2Factory/WeightedPool";
+import { PoolCreated } from "../types/WeightedPoolFactory/BasePoolFactory";
+import { WeightedPool } from "../types/WeightedPoolFactory/WeightedPool";
 import { WeightedParams } from "../types/schema";
 import { scaleDown } from "../helpers/math";
 
@@ -19,7 +19,7 @@ function handleWeightedPoolParams(poolAddress: Address): Bytes {
   return weightedParams.id;
 }
 
-export function handleWeightedPoolV2Created(event: PoolCreated): void {
+export function handleWeightedPoolCreated(event: PoolCreated): void {
   handlePoolCreated(
     event.params.pool,
     event.address, // Factory

@@ -16,7 +16,19 @@ function replacePlaceholders(template, network, networkData) {
   for (const [contractName, contractData] of Object.entries(networkData)) {
     result = result.replace(new RegExp(`{{ ${contractName}\\.address }}`, 'g'), contractData.address);
     result = result.replace(new RegExp(`{{ ${contractName}\\.startBlock }}`, 'g'), contractData.startBlock.toString());
-    result = result.replace(new RegExp(`{{ ${contractName}\\.storeEventsFrom }}`, 'g'), contractData.storeEventsFrom);
+    // Missing storeEventsFrom used to become the literal "undefined" and break Ormi deploy
+    if (result.includes(`{{ ${contractName}.storeEventsFrom }}`)) {
+      const storeFrom = contractData.storeEventsFrom;
+      if (storeFrom === undefined || storeFrom === null || storeFrom === '') {
+        throw new Error(
+          `${network}: ${contractName}.storeEventsFrom is required (block number string, e.g. "0")`
+        );
+      }
+      result = result.replace(
+        new RegExp(`{{ ${contractName}\\.storeEventsFrom }}`, 'g'),
+        String(storeFrom)
+      );
+    }
   }
   
   result = result

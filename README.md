@@ -14,11 +14,11 @@ pnpm install
 pnpm generate-manifests
 pnpm codegen
 
-pnpm pools <command>  # e.g. pnpm pools build
-pnpm vault <command>  # e.g. pnpm vault build
+pnpm pools <command>  # e.g. pnpm pools build subgraph.sepolia.yaml
+pnpm vault <command>  # e.g. pnpm vault build subgraph.sepolia.yaml
 ```
 
-Contract addresses live in `networks.json`. Manifests (`subgraph*.yaml`) are generated from `subgraphs/*/template.yaml` via `pnpm generate-manifests` and are gitignored — always regenerate before build.
+Contract addresses live in `networks.json`. Manifests (`subgraph.<network>.yaml`) are generated from `subgraphs/*/template.yaml` via `pnpm generate-manifests` and are gitignored — always regenerate before build, and always pass the network manifest to `build` / `codegen`.
 
 Full local check (install + manifests + codegen + all network builds):
 
