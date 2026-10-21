@@ -1,7 +1,6 @@
 enum PoolType {
   Weighted
   Stable
-  Gyro2
   GyroE
 }
 
@@ -30,13 +29,6 @@ type StableParams @entity(immutable: true) {
   id: Bytes!
   "Amplification parameter for Stable Pools"
   amp: BigInt!
-}
-
-type Gyro2Params @entity(immutable: true) {
-  "Unique identifier for the Gyro2Params"
-  id: Bytes!
-  sqrtAlpha: BigDecimal!
-  sqrtBeta: BigDecimal!
 }
 
 type GyroEParams @entity(immutable: true) {
@@ -69,8 +61,6 @@ type Pool @entity(immutable: true) {
   weightedParams: WeightedParams
   "Parameters for Stable pools (null for other pool types)"
   stableParams: StableParams
-  "Parameters for Gyro2 pools (null for other pool types)"
-  gyro2Params: Gyro2Params
   "Parameters for GyroE pools (null for other pool types)"
   gyroEParams: GyroEParams
 }
