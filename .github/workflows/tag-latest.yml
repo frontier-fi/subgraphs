@@ -1,0 +1,51 @@
+name: Tag latest
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version label to point latest at (short git SHA)"
+        required: true
+        type: string
+      subgraph:
+        description: "Subgraph (or all)"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - vault
+          - pools
+      network:
+        description: "Network"
+        required: true
+        default: "sepolia"
+        type: choice
+        options:
+          - sepolia
+          - mainnet
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    environment: graph
+    env:
+      ORMI_DEPLOY_KEY: ${{ secrets.ORMI_DEPLOY_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Tag latest
+        run: |
+          set -euo pipefail
+          NETWORK="${{ inputs.network }}"
+          VERSION="${{ inputs.version }}"
+          if [ "${{ inputs.subgraph }}" = "all" ]; then
+            SUBGRAPHS="vault pools"
+          else
+            SUBGRAPHS="${{ inputs.subgraph }}"
+          fi
+          for s in $SUBGRAPHS; do
+            name="${s}-${NETWORK}"
+            echo "Tagging ${name}@${VERSION} as latest"
+            node scripts/tag-latest.js "$name" "$VERSION"
+          done
