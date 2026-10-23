@@ -76,6 +76,6 @@ dataSources:
           file: ./abis/BasePoolFactory.json
       eventHandlers:
         - event: PoolCreated(indexed address)
-          handler: handleGyroEPoolCreated
-      file: ./src/mappings/gyroE.ts
+          handler: handleEclpPoolCreated
+      file: ./src/mappings/eclp.ts
   {{/if}}

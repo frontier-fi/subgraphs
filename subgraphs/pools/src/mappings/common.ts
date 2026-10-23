@@ -6,7 +6,7 @@ import { Pool } from "../types/schema";
 export namespace PoolType {
   export const Weighted = "Weighted";
   export const Stable = "Stable";
-  export const GyroE = "GyroE";
+  export const ECLP = "ECLP";
 }
 
 export function createBasePool(

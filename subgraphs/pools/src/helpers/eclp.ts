@@ -1,6 +1,6 @@
 import { BigInt } from "@graphprotocol/graph-ts";
 
-// GyroECLP pools store two parameter sets: the primary params (alpha, beta, c, s, lambda, 18 decimals)
+// ECLP pools store two parameter sets: the primary params (alpha, beta, c, s, lambda, 18 decimals)
 // and the derived params (tauAlpha, tauBeta, u, v, w, z, dSq, 38 decimals, "Xp"). The pool constructor
 // validates only bounds on the derived values - GyroECLPMath.validateDerivedParamsLimits carries an
 // explicit "does NOT check for internal consistency" disclaimer - so a pool can be deployed whose
