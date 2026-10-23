@@ -3,13 +3,13 @@ import { Address, Bytes, log } from "@graphprotocol/graph-ts";
 import { createBasePool, PoolType } from "./common";
 import { PoolCreated } from "../types/GyroECLPPoolFactory/BasePoolFactory";
 import { GyroECLPPool } from "../types/GyroECLPPoolFactory/GyroECLPPool";
-import { GyroEParams } from "../types/schema";
+import { EclpParams } from "../types/schema";
 import {
   EclpRawParams,
   derivedParamsAreConsistent,
   tauMatchesBounds,
   tauVectorsAreNormalized,
-} from "../helpers/gyroECLP";
+} from "../helpers/eclp";
 import { scaleDown } from "../helpers/math";
 
 /**
@@ -17,9 +17,9 @@ import { scaleDown } from "../helpers/math";
  * getGyroECLPPoolImmutableData(); older versions only expose getECLPParams().
  */
 function readEclpParams(poolAddress: Address): EclpRawParams | null {
-  let gyroEPool = GyroECLPPool.bind(poolAddress);
+  let pool = GyroECLPPool.bind(poolAddress);
 
-  let immutableResult = gyroEPool.try_getGyroECLPPoolImmutableData();
+  let immutableResult = pool.try_getGyroECLPPoolImmutableData();
   if (!immutableResult.reverted) {
     let d = immutableResult.value;
     return new EclpRawParams(
@@ -40,8 +40,8 @@ function readEclpParams(poolAddress: Address): EclpRawParams | null {
     );
   }
 
-  // Fallback for older pool versions (e.g. V2) that expose getECLPParams instead
-  let eclpResult = gyroEPool.try_getECLPParams();
+  // Fallback for older pool versions that expose getECLPParams instead
+  let eclpResult = pool.try_getECLPParams();
   if (!eclpResult.reverted) {
     let params = eclpResult.value.value0;
     let d = eclpResult.value.value1;
@@ -66,35 +66,35 @@ function readEclpParams(poolAddress: Address): EclpRawParams | null {
   return null;
 }
 
-function saveGyroEParams(
+function saveEclpParams(
   poolAddress: Address,
   raw: EclpRawParams | null
 ): Bytes {
-  let gyroEParams = new GyroEParams(poolAddress);
+  let eclpParams = new EclpParams(poolAddress);
   if (raw) {
     // Base params - 18 decimals
-    gyroEParams.alpha = scaleDown(raw.alpha, 18);
-    gyroEParams.beta = scaleDown(raw.beta, 18);
-    gyroEParams.c = scaleDown(raw.c, 18);
-    gyroEParams.s = scaleDown(raw.s, 18);
-    gyroEParams.lambda = scaleDown(raw.lambda, 18);
+    eclpParams.alpha = scaleDown(raw.alpha, 18);
+    eclpParams.beta = scaleDown(raw.beta, 18);
+    eclpParams.c = scaleDown(raw.c, 18);
+    eclpParams.s = scaleDown(raw.s, 18);
+    eclpParams.lambda = scaleDown(raw.lambda, 18);
 
     // Derived params - 38 decimals
-    gyroEParams.tauAlphaX = scaleDown(raw.tauAlphaX, 38);
-    gyroEParams.tauAlphaY = scaleDown(raw.tauAlphaY, 38);
-    gyroEParams.tauBetaX = scaleDown(raw.tauBetaX, 38);
-    gyroEParams.tauBetaY = scaleDown(raw.tauBetaY, 38);
-    gyroEParams.u = scaleDown(raw.u, 38);
-    gyroEParams.v = scaleDown(raw.v, 38);
-    gyroEParams.w = scaleDown(raw.w, 38);
-    gyroEParams.z = scaleDown(raw.z, 38);
-    gyroEParams.dSq = scaleDown(raw.dSq, 38);
+    eclpParams.tauAlphaX = scaleDown(raw.tauAlphaX, 38);
+    eclpParams.tauAlphaY = scaleDown(raw.tauAlphaY, 38);
+    eclpParams.tauBetaX = scaleDown(raw.tauBetaX, 38);
+    eclpParams.tauBetaY = scaleDown(raw.tauBetaY, 38);
+    eclpParams.u = scaleDown(raw.u, 38);
+    eclpParams.v = scaleDown(raw.v, 38);
+    eclpParams.w = scaleDown(raw.w, 38);
+    eclpParams.z = scaleDown(raw.z, 38);
+    eclpParams.dSq = scaleDown(raw.dSq, 38);
   }
-  gyroEParams.save();
-  return gyroEParams.id;
+  eclpParams.save();
+  return eclpParams.id;
 }
 
-function createGyroEPool(
+function createEclpPool(
   poolAddress: Address,
   factoryAddress: Address,
   version: i32
@@ -103,7 +103,7 @@ function createGyroEPool(
 
   // The pool constructor checks only bounds on the derived params, never that they belong to the primary
   // params. A pool that fails either half of that missing check misprices against what it advertises, so
-  // it is not indexed at all: no Pool, no GyroEParams, and no Factory either, since getFactory only runs
+  // it is not indexed at all: no Pool, no EclpParams, and no Factory either, since getFactory only runs
   // once the checks have passed.
   if (raw) {
     let reason = "";
@@ -115,7 +115,7 @@ function createGyroEPool(
       reason = "tauAlpha or tauBeta does not correspond to the pool's alpha and beta";
     }
     if (reason != "") {
-      log.warning("GyroECLP pool {} not indexed: {}", [
+      log.warning("ECLP pool {} not indexed: {}", [
         poolAddress.toHexString(),
         reason,
       ]);
@@ -123,13 +123,13 @@ function createGyroEPool(
     }
   }
 
-  let pool = createBasePool(poolAddress, factoryAddress, PoolType.GyroE, version);
-  pool.gyroEParams = saveGyroEParams(poolAddress, raw);
+  let pool = createBasePool(poolAddress, factoryAddress, PoolType.ECLP, version);
+  pool.eclpParams = saveEclpParams(poolAddress, raw);
   pool.save();
 }
 
-export function handleGyroEPoolCreated(event: PoolCreated): void {
-  createGyroEPool(
+export function handleEclpPoolCreated(event: PoolCreated): void {
+  createEclpPool(
     event.params.pool,
     event.address, // Factory
     2
