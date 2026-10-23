@@ -18,7 +18,8 @@ if (!deployKey) {
 }
 
 async function main() {
-  const res = await fetch(`${BASE_URL}/public_api/v1/0xGraph/tags/create-tag`, {
+  // Docs say /public_api/... but that 404s; live route is under /api/private/...
+  const res = await fetch(`${BASE_URL}/api/private/v1/0xGraph/tags/create-tag`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${deployKey}`,
