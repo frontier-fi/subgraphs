@@ -100,13 +100,6 @@ for network in "${NETWORKS[@]}"; do
       "$network" \
       "$VERSION" \
       "${DEPLOYMENT_ID:-}"
-
-    if node "${ROOT}/scripts/tag-latest.js" "$SUBGRAPH_NAME" "$VERSION"; then
-      echo "  ✓ Tagged ${SUBGRAPH_NAME} latest → ${VERSION}"
-    else
-      echo "  ⚠ Deployed but failed to set latest tag for ${SUBGRAPH_NAME}"
-      echo "::warning title=Tag ${SUBGRAPH_NAME}::failed to set latest → ${VERSION}"
-    fi
   else
     REASON="$(grep -Eo 'E[0-9]{3}:[^[:space:]].*' "$LOG" | tail -1 || true)"
     if [ -z "$REASON" ]; then

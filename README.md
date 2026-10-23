@@ -33,6 +33,6 @@ Deploys only run in CI (`.github/workflows/deploy.yml`) — not locally. Trigger
 - push to `main` when `subgraphs/**`, `networks.json`, or `scripts/**` change
 - manual **workflow_dispatch** (pick subgraph + network, or `all`)
 
-Requires the `ORMI_DEPLOY_KEY` repo secret. Per-target deploy failures (version already exists, plan limit, etc.) are warned and skipped so the rest of the matrix still runs. Successful deploys are printed in the job log and Summary (endpoints / query URLs), and the Ormi `latest` tag is pointed at that version so `…/subgraphs/{name}/latest/gn` keeps working.
+Requires the `ORMI_DEPLOY_KEY` repo secret. Per-target deploy failures (version already exists, plan limit, etc.) are warned and skipped so the rest of the matrix still runs. Successful deploys are printed in the job log and Summary (endpoints / query URLs). Point the Ormi `latest` tag at a version in the dashboard when you want a stable `…/subgraphs/{name}/latest/gn` URL.
 
 Subgraph names: `{vault|pools}-{network}` (e.g. `vault-sepolia`). Version label: short git SHA.
