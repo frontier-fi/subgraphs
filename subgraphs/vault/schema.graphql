@@ -7,6 +7,8 @@ type Vault @entity(immutable: false) {
   protocolFeeController: Bytes!
   "Indicates whether the Vault is currently paused"
   isPaused: Boolean!
+  "Indicates whether ERC4626 buffers are currently paused"
+  isBuffersPaused: Boolean!
   "Protocol swap fee percentage"
   protocolSwapFee: BigDecimal!
   "Protocol yield fee percentage"
@@ -52,7 +54,8 @@ type Pool @entity(immutable: false) {
   isPaused: Boolean!
   "Indicates whether the Pool is in recovery mode"
   isInRecoveryMode: Boolean!
-
+  "Indicates whether this pool is exempt from protocol fees"
+  protocolFeeExempt: Boolean!
 
   "Account empowered to pause/unpause the pool"
   pauseManager: Bytes!
@@ -286,6 +289,10 @@ type AddRemove @entity(immutable: true) {
   id: Bytes!
   "Type of investment (Add or Remove)"
   type: InvestType!
+  "AddLiquidityKind / RemoveLiquidityKind enum value from the Vault event"
+  kind: Int!
+  "BPT total supply after the operation"
+  totalSupply: BigDecimal!
   "Address of the sender"
   sender: Bytes!
   "Amounts of tokens added or removed"

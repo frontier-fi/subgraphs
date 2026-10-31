@@ -4,6 +4,8 @@ import { handlePoolCreated, PoolType } from "./common";
 import { PoolCreated } from "../types/StablePoolFactory/BasePoolFactory";
 import { StablePool } from "../types/StablePoolFactory/StablePool";
 import { StableParams } from "../types/schema";
+import { getFactoryVersion } from "../helpers/version";
+import { StablePool as StablePoolTemplate } from "../types/templates";
 
 function handleStablePoolParams(poolAddress: Address): Bytes {
   let stablePool = StablePool.bind(poolAddress);
@@ -19,12 +21,20 @@ function handleStablePoolParams(poolAddress: Address): Bytes {
 }
 
 export function handleStablePoolCreated(event: PoolCreated): void {
+  let pool = StablePool.bind(event.params.pool);
+  let versionCall = pool.try_version();
+  let factoryVersion = versionCall.reverted
+    ? 0
+    : getFactoryVersion(versionCall.value);
+
   handlePoolCreated(
     event.params.pool,
     event.address, // Factory
     PoolType.Stable,
-    1,
+    factoryVersion,
     handleStablePoolParams,
     "stableParams"
   );
+
+  StablePoolTemplate.create(event.params.pool);
 }

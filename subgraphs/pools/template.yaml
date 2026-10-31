@@ -79,3 +79,27 @@ dataSources:
           handler: handleEclpPoolCreated
       file: ./src/mappings/eclp.ts
   {{/if}}
+templates:
+  {{#if StablePoolFactory}}
+  - kind: ethereum/contract
+    name: StablePool
+    network: {{ network }}
+    source:
+      abi: StablePool
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - StableParams
+        - Pool
+      abis:
+        - name: StablePool
+          file: ./abis/StablePool.json
+      eventHandlers:
+        - event: AmpUpdateStarted(uint256,uint256,uint256,uint256)
+          handler: handleAmpUpdateStarted
+        - event: AmpUpdateStopped(uint256)
+          handler: handleAmpUpdateStopped
+      file: ./src/mappings/amp.ts
+  {{/if}}

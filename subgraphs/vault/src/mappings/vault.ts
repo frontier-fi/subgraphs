@@ -6,6 +6,9 @@ import {
   log,
 } from "@graphprotocol/graph-ts";
 import {
+  AggregateSwapFeePercentageChanged,
+  AggregateYieldFeePercentageChanged,
+  AuthorizerChanged,
   BufferSharesBurned,
   BufferSharesMinted,
   LiquidityAdded,
@@ -19,6 +22,8 @@ import {
   Swap as SwapEvent,
   SwapFeePercentageChanged,
   Unwrap,
+  VaultBuffersPausedStateChanged,
+  VaultPausedStateChanged,
   Wrap,
 } from "../types/Vault/Vault";
 import {
@@ -37,10 +42,12 @@ import {
   getToken,
   getVault,
   loadPoolToken,
+  poolAggregateSwapFee,
+  updatePoolTokenRates,
   updateProtocolYieldFeeAmounts,
 } from "../helpers/entities";
 import { ZERO_ADDRESS, ZERO_BD, ZERO_BI } from "../helpers/constants";
-import { hexToBigInt, scaleDown, scaleUp } from "../helpers/misc";
+import { hexToBigInt, scaleDown } from "../helpers/misc";
 import { BPT, ProtocolFeeController } from "../types/templates";
 import { ERC20 } from "../types/Vault/ERC20";
 import { VaultExtension } from "../types/Vault/VaultExtension";
@@ -70,6 +77,7 @@ export function handlePoolRegistered(event: PoolRegistered): void {
   pool.protocolYieldFee = vault.protocolYieldFee;
   pool.poolCreatorSwapFee = ZERO_BD;
   pool.poolCreatorYieldFee = ZERO_BD;
+  pool.protocolFeeExempt = false;
 
   pool.swapFeeManager = event.params.roleAccounts.swapFeeManager;
   pool.pauseManager = event.params.roleAccounts.pauseManager;
@@ -179,6 +187,7 @@ export function handleLiquidityAdded(event: LiquidityAdded): void {
 
   let poolTokens = pool.tokens.load();
   let joinAmounts = new Array<BigDecimal>(amountsAddedRaw.length);
+  let aggregateFee = poolAggregateSwapFee(pool);
 
   let vault = VaultExtension.bind(event.address);
   let poolTokensInfo = vault.getPoolTokenInfo(poolAddress);
@@ -186,18 +195,21 @@ export function handleLiquidityAdded(event: LiquidityAdded): void {
   for (let i: i32 = 0; i < poolTokens.length; i++) {
     let poolToken = poolTokens[i];
     let joinAmount = scaleDown(
-      event.params.amountsAddedRaw[i],
+      event.params.amountsAddedRaw[poolToken.index],
       poolToken.decimals
     );
-    joinAmounts[i] = joinAmount;
+    joinAmounts[poolToken.index] = joinAmount;
 
     poolToken.balance = scaleDown(
-      poolTokensInfo.getBalancesRaw()[i],
+      poolTokensInfo.getBalancesRaw()[poolToken.index],
       poolToken.decimals
     );
 
     let aggregateSwapFeeAmount = scaleDown(
-      mulDownSwapFee(event.params.swapFeeAmountsRaw[i], pool.protocolSwapFee),
+      mulDownSwapFee(
+        event.params.swapFeeAmountsRaw[poolToken.index],
+        aggregateFee
+      ),
       poolToken.decimals
     );
 
@@ -211,6 +223,8 @@ export function handleLiquidityAdded(event: LiquidityAdded): void {
   }
 
   join.type = "Add";
+  join.kind = event.params.kind;
+  join.totalSupply = scaleDown(event.params.totalSupply, 18);
   join.sender = event.params.liquidityProvider;
   join.amounts = joinAmounts;
   join.pool = poolAddress;
@@ -221,10 +235,11 @@ export function handleLiquidityAdded(event: LiquidityAdded): void {
   join.transactionHash = transactionHash;
 
   const storeEventsFrom = dataSource.context().get("storeEventsFrom");
-  if (storeEventsFrom && event.block.number > storeEventsFrom.toBigInt()) {
+  if (storeEventsFrom && event.block.number >= storeEventsFrom.toBigInt()) {
     join.save();
   }
 
+  updatePoolTokenRates(pool);
   updateProtocolYieldFeeAmounts(pool);
 }
 
@@ -249,6 +264,7 @@ export function handleLiquidityRemoved(event: LiquidityRemoved): void {
 
   let poolTokens = pool.tokens.load();
   let exitAmounts = new Array<BigDecimal>(amounts.length);
+  let aggregateFee = poolAggregateSwapFee(pool);
 
   let vault = VaultExtension.bind(event.address);
   let poolTokensInfo = vault.getPoolTokenInfo(poolAddress);
@@ -256,18 +272,21 @@ export function handleLiquidityRemoved(event: LiquidityRemoved): void {
   for (let i: i32 = 0; i < poolTokens.length; i++) {
     let poolToken = poolTokens[i];
     let exitAmount = scaleDown(
-      event.params.amountsRemovedRaw[i],
+      event.params.amountsRemovedRaw[poolToken.index],
       poolToken.decimals
     );
-    exitAmounts[i] = exitAmount;
+    exitAmounts[poolToken.index] = exitAmount;
 
     poolToken.balance = scaleDown(
-      poolTokensInfo.getBalancesRaw()[i],
+      poolTokensInfo.getBalancesRaw()[poolToken.index],
       poolToken.decimals
     );
 
     let aggregateSwapFeeAmount = scaleDown(
-      mulDownSwapFee(event.params.swapFeeAmountsRaw[i], pool.protocolSwapFee),
+      mulDownSwapFee(
+        event.params.swapFeeAmountsRaw[poolToken.index],
+        aggregateFee
+      ),
       poolToken.decimals
     );
 
@@ -281,6 +300,8 @@ export function handleLiquidityRemoved(event: LiquidityRemoved): void {
   }
 
   exit.type = "Remove";
+  exit.kind = event.params.kind;
+  exit.totalSupply = scaleDown(event.params.totalSupply, 18);
   exit.sender = event.params.liquidityProvider;
   exit.amounts = exitAmounts;
   exit.pool = poolAddress;
@@ -291,10 +312,11 @@ export function handleLiquidityRemoved(event: LiquidityRemoved): void {
   exit.transactionHash = transactionHash;
 
   const storeEventsFrom = dataSource.context().get("storeEventsFrom");
-  if (storeEventsFrom && event.block.number > storeEventsFrom.toBigInt()) {
+  if (storeEventsFrom && event.block.number >= storeEventsFrom.toBigInt()) {
     exit.save();
   }
 
+  updatePoolTokenRates(pool);
   updateProtocolYieldFeeAmounts(pool);
 }
 
@@ -360,14 +382,15 @@ export function handleSwap(event: SwapEvent): void {
   swap.swapFeeToken = event.params.tokenIn;
   swap.swapFeePercentage = swapFeePercentage;
   swap.hasDynamicSwapFee = hasDynamicSwapFee;
-  swap.user = event.transaction.from;
+  // Vault Swap events do not include the swapper; do not invent tx.from.
+  swap.user = ZERO_ADDRESS;
   swap.logIndex = event.logIndex;
   swap.blockNumber = event.block.number;
   swap.blockTimestamp = event.block.timestamp;
   swap.transactionHash = event.transaction.hash;
 
   const storeEventsFrom = dataSource.context().get("storeEventsFrom");
-  if (storeEventsFrom && event.block.number > storeEventsFrom.toBigInt()) {
+  if (storeEventsFrom && event.block.number >= storeEventsFrom.toBigInt()) {
     swap.save();
   }
 
@@ -385,7 +408,7 @@ export function handleSwap(event: SwapEvent): void {
   }
 
   let aggregateSwapFeeAmount = scaleDown(
-    mulDownSwapFee(event.params.swapFeeAmount, pool.protocolSwapFee),
+    mulDownSwapFee(event.params.swapFeeAmount, poolAggregateSwapFee(pool)),
     poolTokenIn.decimals
   );
 
@@ -404,11 +427,18 @@ export function handleSwap(event: SwapEvent): void {
     aggregateSwapFeeAmount
   );
 
-  poolTokenIn.totalStaticSwapFee =
-    poolTokenIn.totalStaticSwapFee.plus(swapFeeAmount);
   poolTokenIn.totalSwapFeeBase =
     poolTokenIn.totalSwapFeeBase.plus(swapFeeBaseAmount);
+  poolTokenIn.totalSwapFeeDelta =
+    poolTokenIn.totalSwapFeeDelta.plus(swapFeeDeltaAmount);
 
+  // Static counter gets the base (static) fee component; dynamic gets the
+  // full fee only when the swap used a dynamic percentage.
+  let staticSwapFeeCredit = hasDynamicSwapFee
+    ? swapFeeBaseAmount
+    : swapFeeAmount;
+  poolTokenIn.totalStaticSwapFee =
+    poolTokenIn.totalStaticSwapFee.plus(staticSwapFeeCredit);
   if (hasDynamicSwapFee) {
     poolTokenIn.totalDynamicSwapFee =
       poolTokenIn.totalDynamicSwapFee.plus(swapFeeAmount);
@@ -423,6 +453,7 @@ export function handleSwap(event: SwapEvent): void {
   poolTokenOut.volume = poolTokenOut.volume.plus(tokenAmountOut);
   poolTokenOut.save();
 
+  updatePoolTokenRates(pool);
   updateProtocolYieldFeeAmounts(pool);
 }
 
@@ -566,11 +597,11 @@ export function handleUnwrap(event: Unwrap): void {
 
   buffer.underlyingBalance = scaleDown(
     hexToBigInt(underlyingBalance),
-    wrappedToken.decimals
+    underlyingToken.decimals
   );
   buffer.wrappedBalance = scaleDown(
     hexToBigInt(wrappedBalance),
-    underlyingToken.decimals
+    wrappedToken.decimals
   );
   buffer.save();
 }
@@ -595,11 +626,11 @@ export function handleWrap(event: Wrap): void {
 
   buffer.underlyingBalance = scaleDown(
     hexToBigInt(underlyingBalance),
-    wrappedToken.decimals
+    underlyingToken.decimals
   );
   buffer.wrappedBalance = scaleDown(
     hexToBigInt(wrappedBalance),
-    underlyingToken.decimals
+    wrappedToken.decimals
   );
   buffer.save();
 }
@@ -654,4 +685,44 @@ export function handleProtocolFeeControllerChanged(
   vault.save();
 
   ProtocolFeeController.create(event.params.newProtocolFeeController);
+}
+
+export function handleAuthorizerChanged(event: AuthorizerChanged): void {
+  let vault = getVault();
+  vault.authorizer = event.params.newAuthorizer;
+  vault.save();
+}
+
+export function handleVaultPausedStateChanged(
+  event: VaultPausedStateChanged
+): void {
+  let vault = getVault();
+  vault.isPaused = event.params.paused;
+  vault.save();
+}
+
+export function handleVaultBuffersPausedStateChanged(
+  event: VaultBuffersPausedStateChanged
+): void {
+  let vault = getVault();
+  vault.isBuffersPaused = event.params.paused;
+  vault.save();
+}
+
+export function handleAggregateSwapFeePercentageChanged(
+  event: AggregateSwapFeePercentageChanged
+): void {
+  // Aggregate = protocol + creator; components are tracked via PFC events.
+  // Keep pool loaded so the Vault-side aggregate update is acknowledged.
+  let pool = Pool.load(event.params.pool);
+  if (!pool) return;
+  pool.save();
+}
+
+export function handleAggregateYieldFeePercentageChanged(
+  event: AggregateYieldFeePercentageChanged
+): void {
+  let pool = Pool.load(event.params.pool);
+  if (!pool) return;
+  pool.save();
 }

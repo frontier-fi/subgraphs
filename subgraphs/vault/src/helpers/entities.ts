@@ -15,18 +15,20 @@ import { VaultExtension } from "../types/Vault/VaultExtension";
 import { scaleDown } from "./misc";
 import { ProtocolFeeController } from "../types/templates";
 
-const DAY = 24 * 60 * 60;
-
 export function getVault(): Vault {
   let vault: Vault | null = Vault.load(VAULT_ADDRESS);
   if (vault != null) return vault;
 
   let vaultContract = VaultExtension.bind(changetype<Address>(VAULT_ADDRESS));
   let protocolFeeController = vaultContract.getProtocolFeeController();
+  let authorizerCall = vaultContract.try_getAuthorizer();
 
   vault = new Vault(VAULT_ADDRESS);
   vault.isPaused = false;
-  vault.authorizer = ZERO_ADDRESS;
+  vault.isBuffersPaused = false;
+  vault.authorizer = authorizerCall.reverted
+    ? ZERO_ADDRESS
+    : authorizerCall.value;
   vault.protocolSwapFee = ZERO_BD;
   vault.protocolYieldFee = ZERO_BD;
   vault.protocolFeeController = protocolFeeController;
@@ -201,4 +203,26 @@ export function updateProtocolYieldFeeAmounts(pool: Pool): void {
 
     poolToken.save();
   }
+}
+
+export function updatePoolTokenRates(pool: Pool): void {
+  let vault = VaultExtension.bind(changetype<Address>(pool.vault));
+  let ratesCall = vault.try_getPoolTokenRates(
+    changetype<Address>(pool.address)
+  );
+  if (ratesCall.reverted) return;
+
+  let tokenRates = ratesCall.value.value1;
+  let poolTokens = pool.tokens.load();
+  for (let i = 0; i < poolTokens.length; i++) {
+    let poolToken = poolTokens[i];
+    let idx = poolToken.index;
+    if (idx < 0 || idx >= tokenRates.length) continue;
+    poolToken.priceRate = scaleDown(tokenRates[idx], 18);
+    poolToken.save();
+  }
+}
+
+export function poolAggregateSwapFee(pool: Pool): BigDecimal {
+  return pool.protocolSwapFee.plus(pool.poolCreatorSwapFee);
 }

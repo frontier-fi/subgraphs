@@ -24,7 +24,7 @@ type WeightedParams @entity(immutable: true) {
   weights: [BigDecimal!]!
 }
 
-type StableParams @entity(immutable: true) {
+type StableParams @entity(immutable: false) {
   "Unique identifier for the StablePoolParams"
   id: Bytes!
   "Amplification parameter for Stable Pools"

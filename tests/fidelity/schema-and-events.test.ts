@@ -34,8 +34,10 @@ describe("Schema and event fidelity", () => {
 
   it("priceRate is refreshed from vault rates after registration", () => {
     const vaultTs = readRepo("subgraphs/vault/src/mappings/vault.ts");
-    expect(vaultTs).toMatch(/priceRate\s*=/);
-    expect(vaultTs).toMatch(/getPoolTokenRates/);
+    const entities = readRepo("subgraphs/vault/src/helpers/entities.ts");
+    expect(vaultTs).toMatch(/updatePoolTokenRates/);
+    expect(entities).toMatch(/priceRate\s*=/);
+    expect(entities).toMatch(/getPoolTokenRates/);
   });
 
   it("AddRemove records liquidity kind and totalSupply", () => {

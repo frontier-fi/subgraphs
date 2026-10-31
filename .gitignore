@@ -2,5 +2,6 @@ build
 node_modules
 subgraphs/*/subgraph.*.yaml
 subgraphs/**/src/types
+subgraphs/vault/src/helpers/constants.ts
 .DS_Store
 .vscode

@@ -4,8 +4,12 @@ import { scaleDown } from "../helpers/misc";
 import {
   GlobalProtocolSwapFeePercentageChanged,
   GlobalProtocolYieldFeePercentageChanged,
+  InitialPoolAggregateSwapFeePercentage,
+  InitialPoolAggregateYieldFeePercentage,
+  PoolCreatorFeesWithdrawn,
   PoolCreatorSwapFeePercentageChanged,
   PoolCreatorYieldFeePercentageChanged,
+  PoolRegisteredWithFeeController,
   ProtocolFeesWithdrawn,
   ProtocolSwapFeeCollected,
   ProtocolSwapFeePercentageChanged,
@@ -72,11 +76,11 @@ export function handleProtocolSwapFeeCollected(
   event: ProtocolSwapFeeCollected
 ): void {
   let poolToken = loadPoolToken(event.params.pool, event.params.token);
-  poolToken.vaultProtocolSwapFeeBalance = ZERO_BD;
+  let amount = scaleDown(event.params.amount, poolToken.decimals);
+  poolToken.vaultProtocolSwapFeeBalance =
+    poolToken.vaultProtocolSwapFeeBalance.minus(amount);
   poolToken.controllerProtocolFeeBalance =
-    poolToken.controllerProtocolFeeBalance.plus(
-      scaleDown(event.params.amount, poolToken.decimals)
-    );
+    poolToken.controllerProtocolFeeBalance.plus(amount);
   poolToken.save();
 }
 
@@ -84,11 +88,11 @@ export function handleProtocolYieldFeeCollected(
   event: ProtocolYieldFeeCollected
 ): void {
   let poolToken = loadPoolToken(event.params.pool, event.params.token);
-  poolToken.vaultProtocolYieldFeeBalance = ZERO_BD;
+  let amount = scaleDown(event.params.amount, poolToken.decimals);
+  poolToken.vaultProtocolYieldFeeBalance =
+    poolToken.vaultProtocolYieldFeeBalance.minus(amount);
   poolToken.controllerProtocolFeeBalance =
-    poolToken.controllerProtocolFeeBalance.plus(
-      scaleDown(event.params.amount, poolToken.decimals)
-    );
+    poolToken.controllerProtocolFeeBalance.plus(amount);
   poolToken.save();
 }
 
@@ -101,4 +105,56 @@ export function handleProtocolFeesWithdrawn(
       scaleDown(event.params.amount, poolToken.decimals)
     );
   poolToken.save();
+}
+
+export function handleInitialPoolAggregateSwapFeePercentage(
+  event: InitialPoolAggregateSwapFeePercentage
+): void {
+  let pool = Pool.load(event.params.pool);
+  if (!pool) return;
+
+  pool.protocolFeeExempt = event.params.isProtocolFeeExempt;
+  // At registration creator fee is typically 0, so aggregate == protocol.
+  pool.protocolSwapFee = event.params.isProtocolFeeExempt
+    ? ZERO_BD
+    : scaleDown(event.params.aggregateSwapFeePercentage, 18);
+  pool.save();
+}
+
+export function handleInitialPoolAggregateYieldFeePercentage(
+  event: InitialPoolAggregateYieldFeePercentage
+): void {
+  let pool = Pool.load(event.params.pool);
+  if (!pool) return;
+
+  pool.protocolFeeExempt = event.params.isProtocolFeeExempt;
+  pool.protocolYieldFee = event.params.isProtocolFeeExempt
+    ? ZERO_BD
+    : scaleDown(event.params.aggregateYieldFeePercentage, 18);
+  pool.save();
+}
+
+export function handlePoolCreatorFeesWithdrawn(
+  event: PoolCreatorFeesWithdrawn
+): void {
+  // Creator fee balances are not tracked separately from protocol controller
+  // balances today; acknowledge the event for indexing completeness.
+  let pool = Pool.load(event.params.pool);
+  if (!pool) return;
+  pool.save();
+}
+
+export function handlePoolRegisteredWithFeeController(
+  event: PoolRegisteredWithFeeController
+): void {
+  let pool = Pool.load(event.params.pool);
+  if (!pool) return;
+
+  pool.poolCreator = event.params.poolCreator;
+  pool.protocolFeeExempt = event.params.protocolFeeExempt;
+  if (event.params.protocolFeeExempt) {
+    pool.protocolSwapFee = ZERO_BD;
+    pool.protocolYieldFee = ZERO_BD;
+  }
+  pool.save();
 }
