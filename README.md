@@ -26,6 +26,14 @@ Full local check (install + manifests + codegen + all network builds):
 pnpm build:all
 ```
 
+## Fidelity tests
+
+Vitest suite under `tests/fidelity` asserts onchain fidelity against the vault and pools mappings. Runs in CI on every PR to `main` (and on pushes to `main`).
+
+```bash
+pnpm test:fidelity
+```
+
 ## Deployment
 
 Deploys only run in CI (`.github/workflows/deploy.yml`) — not locally. Triggers:

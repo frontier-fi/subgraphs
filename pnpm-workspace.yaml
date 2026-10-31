@@ -1,2 +1,4 @@
 packages:
   - "subgraphs/*"
+allowBuilds:
+  esbuild: true
