@@ -160,6 +160,8 @@ type PoolToken @entity(immutable: false) {
   token: Token!
   "TokenType enum from PoolRegistered (0=STANDARD, 1=TOKEN_WITH_RATE, 2=ERC4626)"
   tokenType: Int!
+  "Rate provider from PoolRegistered. Zero address when the token has none."
+  rateProvider: Bytes!
   "Current balance of this token in the Pool"
   balance: BigDecimal!
   "Total volume of this token traded in the Pool"

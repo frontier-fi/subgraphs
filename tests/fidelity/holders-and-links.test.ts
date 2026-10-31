@@ -22,13 +22,14 @@ describe("Holders, rate providers, and late links", () => {
     expect(body).toMatch(/event\.params\.from\s*==\s*event\.params\.to/);
   });
 
-  it("createRateProvider skips address(0)", () => {
+  it("createRateProvider writes one row per token, including address(0)", () => {
     const body = extractFunction(
       readRepo("subgraphs/vault/src/helpers/entities.ts"),
       "createRateProvider"
     )!;
-    expect(body).toMatch(/rateProvider\.equals\(\s*ZERO_ADDRESS\s*\)/);
-    expect(body).toMatch(/return;/);
+    expect(body).not.toMatch(/if\s*\(\s*tokenConfig\.rateProvider\.equals\(\s*ZERO_ADDRESS\s*\)\s*\)/);
+    expect(body).toMatch(/rateProvider\.address\s*=\s*tokenConfig\.rateProvider/);
+    expect(body).toMatch(/rateProvider\.save\(\)/);
   });
 
   it("createPoolToken links the Token entity for derived backfills", () => {
@@ -37,6 +38,7 @@ describe("Holders, rate providers, and late links", () => {
       "createPoolToken"
     )!;
     expect(body).toMatch(/poolToken\.token\s*=\s*token\.id/);
+    expect(body).toMatch(/poolToken\.rateProvider\s*=\s*tokenConfig\.rateProvider/);
   });
 
   it("new buffers and pools backfill PoolToken.buffer / nestedPool", () => {
@@ -46,5 +48,11 @@ describe("Holders, rate providers, and late links", () => {
     expect(entities).toMatch(/function linkNestedPoolToPoolTokens/);
     expect(vault).toMatch(/linkBufferToPoolTokens\(/);
     expect(vault).toMatch(/linkNestedPoolToPoolTokens\(/);
+    const bufferLink = extractFunction(entities, "linkBufferToPoolTokens")!;
+    const nestedLink = extractFunction(entities, "linkNestedPoolToPoolTokens")!;
+    expect(bufferLink).toMatch(/Pool\.load\(\s*poolToken\.pool\s*\)/);
+    expect(bufferLink).toMatch(/pool\.save\(\)/);
+    expect(nestedLink).toMatch(/Pool\.load\(\s*poolToken\.pool\s*\)/);
+    expect(nestedLink).toMatch(/pool\.save\(\)/);
   });
 });

@@ -60,7 +60,7 @@ type EclpParams @entity(immutable: true) {
   dSq: BigDecimal!
 }
 
-type Pool @entity(immutable: true) {
+type Pool @entity(immutable: false) {
   "Unique identifier for the Pool"
   id: Bytes!
   "Address of the Pool contract"

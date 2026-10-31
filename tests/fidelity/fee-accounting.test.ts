@@ -111,6 +111,9 @@ describe("Swap / protocol fee accounting", () => {
       expect(body).toMatch(/ensurePending|PendingPoolFeeInit/);
     }
     expect(vault).toMatch(/applyPendingPoolFeeInit/);
+    expect(extractFunction(src, "applyPendingPoolFeeInit")!).toMatch(
+      /store\.remove\(\s*"PendingPoolFeeInit"/
+    );
   });
 
   it("withdrawals do not drive controller balances negative", () => {

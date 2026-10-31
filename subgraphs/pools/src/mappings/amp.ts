@@ -4,7 +4,7 @@ import {
   AmpUpdateStopped,
   StablePool,
 } from "../types/templates/StablePool/StablePool";
-import { StableParams } from "../types/schema";
+import { Pool, StableParams } from "../types/schema";
 
 function ensureStableParams(poolAddress: Address): StableParams {
   let stableParams = StableParams.load(poolAddress);
@@ -28,6 +28,11 @@ function ampPrecision(poolAddress: Address): BigInt {
   }
   // StablePool AMP_PRECISION is 1e3 when the view is unavailable.
   return BigInt.fromI32(1000);
+}
+
+function touchPool(poolAddress: Address): void {
+  let pool = Pool.load(poolAddress);
+  if (pool) pool.save();
 }
 
 function syncCurrentAmp(stableParams: StableParams, poolAddress: Address): void {
@@ -70,10 +75,15 @@ export function settleAmpRamp(stableParams: StableParams, now: BigInt): void {
 }
 
 export function handleBlock(block: ethereum.Block): void {
-  let stableParams = StableParams.load(dataSource.address());
+  let poolAddress = dataSource.address();
+  let stableParams = StableParams.load(poolAddress);
   if (!stableParams || !stableParams.ampIsUpdating) return;
+  let prevAmp = stableParams.amp;
   settleAmpRamp(stableParams, block.timestamp);
   stableParams.save();
+  if (!stableParams.amp.equals(prevAmp)) {
+    touchPool(poolAddress);
+  }
 }
 
 export function handleAmpUpdateStarted(event: AmpUpdateStarted): void {
@@ -88,6 +98,7 @@ export function handleAmpUpdateStarted(event: AmpUpdateStarted): void {
   syncCurrentAmp(stableParams, event.address);
   settleAmpRamp(stableParams, event.block.timestamp);
   stableParams.save();
+  touchPool(event.address);
 }
 
 export function handleAmpUpdateStopped(event: AmpUpdateStopped): void {
@@ -99,4 +110,5 @@ export function handleAmpUpdateStopped(event: AmpUpdateStopped): void {
   stableParams.ampEndTime = BigInt.fromI32(0);
   syncCurrentAmp(stableParams, event.address);
   stableParams.save();
+  touchPool(event.address);
 }

@@ -91,6 +91,7 @@ export function createPoolToken(
   poolToken.token = token.id;
   poolToken.index = index;
   poolToken.tokenType = tokenConfig.tokenType;
+  poolToken.rateProvider = tokenConfig.rateProvider;
   poolToken.priceRate = ONE_BD;
   poolToken.balance = ZERO_BD;
   poolToken.volume = ZERO_BD;
@@ -119,11 +120,8 @@ export function createRateProvider(
   poolAddress: Address,
   tokenConfig: PoolRegisteredTokenConfigStruct
 ): void {
-  // STANDARD tokens use address(0); do not create junk RateProvider rows.
-  if (tokenConfig.rateProvider.equals(ZERO_ADDRESS)) {
-    return;
-  }
-
+  // Always write a row, including address(0). The backend indexes
+  // pool.rateProviders[i] in token registration order.
   let rateProviderId = poolAddress
     .concat(tokenConfig.token)
     .concat(tokenConfig.rateProvider);
@@ -149,6 +147,8 @@ export function linkBufferToPoolTokens(buffer: Buffer): void {
     let poolToken = poolTokens[i];
     poolToken.buffer = buffer.id;
     poolToken.save();
+    let pool = Pool.load(poolToken.pool);
+    if (pool) pool.save();
   }
 }
 
@@ -162,6 +162,8 @@ export function linkNestedPoolToPoolTokens(poolAddress: Address): void {
     let poolToken = poolTokens[i];
     poolToken.nestedPool = poolAddress;
     poolToken.save();
+    let pool = Pool.load(poolToken.pool);
+    if (pool) pool.save();
   }
 }
 

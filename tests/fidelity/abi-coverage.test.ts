@@ -58,7 +58,17 @@ describe("ABI ↔ template handler coverage", () => {
     const amp = readRepo("subgraphs/pools/src/mappings/amp.ts");
     expect(amp).toMatch(/function settleAmpRamp/);
     expect(amp).toMatch(/function handleBlock/);
+    expect(amp).toMatch(/function touchPool/);
     expect(amp).toMatch(/ampIsUpdating\s*=\s*false/);
+    expect(extractFunction(amp, "handleAmpUpdateStarted")!).toMatch(
+      /touchPool\(\s*event\.address\s*\)/
+    );
+    expect(extractFunction(amp, "handleAmpUpdateStopped")!).toMatch(
+      /touchPool\(\s*event\.address\s*\)/
+    );
+    expect(extractFunction(amp, "handleBlock")!).toMatch(
+      /if\s*\(\s*!stableParams\.amp\.equals\(\s*prevAmp\s*\)\s*\)/
+    );
     const template = readRepo("subgraphs/pools/template.yaml");
     expect(template).toMatch(/handler:\s*handleBlock/);
   });

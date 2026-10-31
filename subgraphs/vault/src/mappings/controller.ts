@@ -1,4 +1,4 @@
-import { BigDecimal, Bytes } from "@graphprotocol/graph-ts";
+import { BigDecimal, Bytes, store } from "@graphprotocol/graph-ts";
 import {
   aggregateFeePercentage,
   getVault,
@@ -95,6 +95,7 @@ export function applyPendingPoolFeeInit(pool: Pool): void {
     pool.aggregateYieldFee = ZERO_BD;
   }
   pool.save();
+  store.remove("PendingPoolFeeInit", pending.id.toHexString());
 }
 
 function applyCollected(
