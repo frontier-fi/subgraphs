@@ -11,6 +11,7 @@ import { PoolShare } from "../types/schema";
 import { ONE_BD, VAULT_ADDRESS, ZERO_ADDRESS, ZERO_BD, ZERO_BI } from "./constants";
 import { PoolRegisteredTokenConfigStruct } from "../types/Vault/Vault";
 import { ERC20 } from "../types/Vault/ERC20";
+import { ERC4626 } from "../types/Vault/ERC4626";
 import { VaultExtension } from "../types/Vault/VaultExtension";
 import { scaleDown, scaleUp } from "./misc";
 import { computeAggregateFeePercentageRaw, mulDown } from "./math";
@@ -189,7 +190,47 @@ export function createToken(tokenAddress: Address): void {
   token.symbol = symbolCall.reverted ? "" : symbolCall.value;
   token.decimals = decimalsCall.reverted ? 0 : decimalsCall.value;
   token.address = tokenAddress;
+  token.isErc4626 = false;
+  token.underlyingToken = null;
   token.save();
+}
+
+/**
+ * Create a Buffer when wrappedTokenAddress is an ERC-4626 vault.
+ * Rate-provider tokens (tokenType 1) whose asset() reverts stay null.
+ */
+export function tryInitErc4626Buffer(
+  wrappedTokenAddress: Address
+): Buffer | null {
+  let existing = Buffer.load(wrappedTokenAddress);
+  if (existing) {
+    let wrappedToken = getToken(wrappedTokenAddress);
+    wrappedToken.isErc4626 = true;
+    wrappedToken.underlyingToken = existing.underlyingToken;
+    wrappedToken.save();
+    return existing;
+  }
+
+  let assetCall = ERC4626.bind(wrappedTokenAddress).try_asset();
+  if (assetCall.reverted || assetCall.value.equals(ZERO_ADDRESS)) {
+    return null;
+  }
+
+  let underlyingToken = getToken(assetCall.value);
+  let wrappedToken = getToken(wrappedTokenAddress);
+  wrappedToken.isErc4626 = true;
+  wrappedToken.underlyingToken = underlyingToken.id;
+  wrappedToken.save();
+
+  let buffer = new Buffer(wrappedTokenAddress);
+  buffer.wrappedToken = wrappedToken.id;
+  buffer.underlyingToken = underlyingToken.id;
+  buffer.wrappedBalance = ZERO_BD;
+  buffer.underlyingBalance = ZERO_BD;
+  buffer.totalShares = ZERO_BD;
+  buffer.save();
+  linkBufferToPoolTokens(buffer);
+  return buffer;
 }
 
 export function getToken(tokenAddress: Address): Token {
@@ -305,9 +346,20 @@ export function accrueVaultSwapFee(
 }
 
 export function updateProtocolYieldFeeAmounts(pool: Pool): void {
-  let vault = VaultExtension.bind(changetype<Address>(pool.vault));
+  if (pool.protocolFeeExempt) return;
 
   let poolTokens = pool.tokens.load();
+  let anyPaysYield = false;
+  for (let i = 0; i < poolTokens.length; i++) {
+    if (poolTokens[i].paysYieldFees) {
+      anyPaysYield = true;
+      break;
+    }
+  }
+  if (!anyPaysYield) return;
+
+  let vault = VaultExtension.bind(changetype<Address>(pool.vault));
+
   for (let i = 0; i < poolTokens.length; i++) {
     let poolToken = poolTokens[i];
 
