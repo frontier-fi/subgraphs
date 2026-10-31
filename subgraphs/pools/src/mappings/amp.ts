@@ -20,21 +20,33 @@ function ensureStableParams(poolAddress: Address): StableParams {
   return stableParams;
 }
 
+function ampPrecision(poolAddress: Address): BigInt {
+  let stablePool = StablePool.bind(poolAddress);
+  let ampResult = stablePool.try_getAmplificationParameter();
+  if (!ampResult.reverted) {
+    return ampResult.value.value2;
+  }
+  // StablePool AMP_PRECISION is 1e3 when the view is unavailable.
+  return BigInt.fromI32(1000);
+}
+
 function syncCurrentAmp(stableParams: StableParams, poolAddress: Address): void {
   let stablePool = StablePool.bind(poolAddress);
   let ampResult = stablePool.try_getAmplificationParameter();
   if (!ampResult.reverted) {
     let ampValue = ampResult.value.value0;
-    let ampPrecision = ampResult.value.value2;
-    stableParams.amp = ampValue.div(ampPrecision);
+    let precision = ampResult.value.value2;
+    stableParams.amp = ampValue.div(precision);
   }
 }
 
 export function handleAmpUpdateStarted(event: AmpUpdateStarted): void {
   let stableParams = ensureStableParams(event.address);
+  let precision = ampPrecision(event.address);
   stableParams.ampIsUpdating = true;
-  stableParams.ampStartValue = event.params.startValue;
-  stableParams.ampEndValue = event.params.endValue;
+  // Event values are precision-scaled; store same units as `amp`.
+  stableParams.ampStartValue = event.params.startValue.div(precision);
+  stableParams.ampEndValue = event.params.endValue.div(precision);
   stableParams.ampStartTime = event.params.startTime;
   stableParams.ampEndTime = event.params.endTime;
   syncCurrentAmp(stableParams, event.address);

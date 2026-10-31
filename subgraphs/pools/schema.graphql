@@ -31,9 +31,9 @@ type StableParams @entity(immutable: false) {
   amp: BigInt!
   "Whether an amplification update ramp is in progress"
   ampIsUpdating: Boolean!
-  "Ramp start amplification value (raw)"
+  "Ramp start amplification value (precision-normalized, same units as amp)"
   ampStartValue: BigInt!
-  "Ramp end amplification value (raw)"
+  "Ramp end amplification value (precision-normalized, same units as amp)"
   ampEndValue: BigInt!
   "Ramp start timestamp"
   ampStartTime: BigInt!

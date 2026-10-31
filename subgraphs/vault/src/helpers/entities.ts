@@ -88,6 +88,7 @@ export function createPoolToken(
 
   poolToken.pool = poolAddress;
   poolToken.address = tokenConfig.token;
+  poolToken.token = token.id;
   poolToken.index = index;
   poolToken.tokenType = tokenConfig.tokenType;
   poolToken.priceRate = ONE_BD;
@@ -118,6 +119,11 @@ export function createRateProvider(
   poolAddress: Address,
   tokenConfig: PoolRegisteredTokenConfigStruct
 ): void {
+  // STANDARD tokens use address(0); do not create junk RateProvider rows.
+  if (tokenConfig.rateProvider.equals(ZERO_ADDRESS)) {
+    return;
+  }
+
   let rateProviderId = poolAddress
     .concat(tokenConfig.token)
     .concat(tokenConfig.rateProvider);
@@ -131,6 +137,32 @@ export function createRateProvider(
   rateProvider.address = tokenConfig.rateProvider;
   rateProvider.token = poolAddress.concat(tokenConfig.token);
   rateProvider.save();
+}
+
+/** When a Buffer appears after PoolRegistered, link existing PoolTokens. */
+export function linkBufferToPoolTokens(buffer: Buffer): void {
+  let token = Token.load(buffer.id);
+  if (!token) return;
+
+  let poolTokens = token.poolTokens.load();
+  for (let i = 0; i < poolTokens.length; i++) {
+    let poolToken = poolTokens[i];
+    poolToken.buffer = buffer.id;
+    poolToken.save();
+  }
+}
+
+/** When a Pool is registered, backfill nestedPool on PoolTokens that hold its BPT. */
+export function linkNestedPoolToPoolTokens(poolAddress: Address): void {
+  let token = Token.load(poolAddress);
+  if (!token) return;
+
+  let poolTokens = token.poolTokens.load();
+  for (let i = 0; i < poolTokens.length; i++) {
+    let poolToken = poolTokens[i];
+    poolToken.nestedPool = poolAddress;
+    poolToken.save();
+  }
 }
 
 export function loadPoolToken(

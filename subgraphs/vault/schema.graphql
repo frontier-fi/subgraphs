@@ -156,6 +156,8 @@ type PoolToken @entity(immutable: false) {
   decimals: Int!
   "Address of the token"
   address: Bytes!
+  "Token entity for this pool token (same id as address)"
+  token: Token!
   "TokenType enum from PoolRegistered (0=STANDARD, 1=TOKEN_WITH_RATE, 2=ERC4626)"
   tokenType: Int!
   "Current balance of this token in the Pool"
@@ -215,6 +217,8 @@ type Token @entity(immutable: false) {
   decimals: Int!
   "Address of the token"
   address: Bytes!
+  "PoolToken rows that reference this token"
+  poolTokens: [PoolToken!] @derivedFrom(field: "token")
 }
 
 type RateProvider @entity(immutable: false) {

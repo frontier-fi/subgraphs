@@ -41,6 +41,8 @@ import {
   accrueVaultSwapFee,
   createPoolToken,
   createRateProvider,
+  linkBufferToPoolTokens,
+  linkNestedPoolToPoolTokens,
   getToken,
   getVault,
   loadPoolToken,
@@ -162,6 +164,9 @@ export function handlePoolRegistered(event: PoolRegistered): void {
   pool.hookConfig = hookConfig.id;
   pool.hook = hook.id;
   pool.save();
+
+  // Parent pools that already listed this BPT as a token get nestedPool filled in.
+  linkNestedPoolToPoolTokens(poolAddress);
 
   BPT.create(poolAddress);
 }
@@ -462,6 +467,9 @@ export function getBuffer(wrappedTokenAddress: Address): Buffer {
   buffer.wrappedBalance = ZERO_BD;
   buffer.underlyingBalance = ZERO_BD;
   buffer.totalShares = ZERO_BD;
+  // Persist so derived PoolToken.buffer links can reference it.
+  buffer.save();
+  linkBufferToPoolTokens(buffer);
 
   return buffer;
 }

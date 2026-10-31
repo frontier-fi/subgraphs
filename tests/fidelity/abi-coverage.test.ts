@@ -47,8 +47,12 @@ describe("ABI ↔ template handler coverage", () => {
       "handleAmpUpdateStarted"
     )!;
     expect(body).toMatch(/ampIsUpdating\s*=\s*true/);
-    expect(body).toMatch(/ampStartValue\s*=\s*event\.params\.startValue/);
-    expect(body).toMatch(/ampEndValue\s*=\s*event\.params\.endValue/);
+    expect(body).toMatch(
+      /ampStartValue\s*=\s*event\.params\.startValue\.div\(\s*precision\s*\)/
+    );
+    expect(body).toMatch(
+      /ampEndValue\s*=\s*event\.params\.endValue\.div\(\s*precision\s*\)/
+    );
     expect(body).toMatch(/ampStartTime\s*=\s*event\.params\.startTime/);
     expect(body).toMatch(/ampEndTime\s*=\s*event\.params\.endTime/);
   });
