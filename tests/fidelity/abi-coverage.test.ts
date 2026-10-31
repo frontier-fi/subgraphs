@@ -55,6 +55,12 @@ describe("ABI ↔ template handler coverage", () => {
     );
     expect(body).toMatch(/ampStartTime\s*=\s*event\.params\.startTime/);
     expect(body).toMatch(/ampEndTime\s*=\s*event\.params\.endTime/);
+    const amp = readRepo("subgraphs/pools/src/mappings/amp.ts");
+    expect(amp).toMatch(/function settleAmpRamp/);
+    expect(amp).toMatch(/function handleBlock/);
+    expect(amp).toMatch(/ampIsUpdating\s*=\s*false/);
+    const template = readRepo("subgraphs/pools/template.yaml");
+    expect(template).toMatch(/handler:\s*handleBlock/);
   });
 
   it("BufferShares mint and burn use the same BufferShare id scheme", () => {

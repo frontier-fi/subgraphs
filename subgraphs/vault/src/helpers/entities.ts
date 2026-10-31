@@ -8,12 +8,12 @@ import {
   Vault,
 } from "../types/schema";
 import { PoolShare } from "../types/schema";
-import { ONE_BD, VAULT_ADDRESS, ZERO_ADDRESS, ZERO_BD } from "./constants";
+import { ONE_BD, VAULT_ADDRESS, ZERO_ADDRESS, ZERO_BD, ZERO_BI } from "./constants";
 import { PoolRegisteredTokenConfigStruct } from "../types/Vault/Vault";
 import { ERC20 } from "../types/Vault/ERC20";
 import { VaultExtension } from "../types/Vault/VaultExtension";
-import { scaleDown } from "./misc";
-import { mulDownSwapFee } from "./math";
+import { scaleDown, scaleUp } from "./misc";
+import { computeAggregateFeePercentageRaw, mulDown } from "./math";
 import { ProtocolFeeController } from "../types/templates";
 
 export function getVault(): Vault {
@@ -215,25 +215,57 @@ export function createPoolShare(
   return poolShare;
 }
 
-export function poolAggregateSwapFee(pool: Pool): BigDecimal {
-  return pool.protocolSwapFee.plus(pool.poolCreatorSwapFee);
+export function aggregateFeePercentage(
+  protocolPct: BigDecimal,
+  creatorPct: BigDecimal
+): BigDecimal {
+  return scaleDown(
+    computeAggregateFeePercentageRaw(scaleUp(protocolPct, 18), scaleUp(creatorPct, 18)),
+    18
+  );
 }
 
-export function poolAggregateYieldFee(pool: Pool): BigDecimal {
-  return pool.protocolYieldFee.plus(pool.poolCreatorYieldFee);
-}
-
-function splitAggregateFee(
-  aggregateAmount: BigDecimal,
+/**
+ * Split a collected aggregate amount into protocol and creator shares.
+ * Protocol is paid first; creator receives creatorPct of the remainder,
+ * which is `amount * protocol / aggregate` and `amount - protocol`.
+ */
+export function splitAggregateAmount(
+  amount: BigDecimal,
   protocolPct: BigDecimal,
   creatorPct: BigDecimal
 ): BigDecimal[] {
-  let totalPct = protocolPct.plus(creatorPct);
-  if (totalPct.equals(ZERO_BD) || aggregateAmount.equals(ZERO_BD)) {
+  if (amount.le(ZERO_BD)) {
     return [ZERO_BD, ZERO_BD];
   }
-  let protocolPart = aggregateAmount.times(protocolPct).div(totalPct);
-  let creatorPart = aggregateAmount.minus(protocolPart);
+  if (creatorPct.le(ZERO_BD)) {
+    return [amount, ZERO_BD];
+  }
+  if (protocolPct.le(ZERO_BD)) {
+    return [ZERO_BD, amount];
+  }
+
+  let aggregateRaw = computeAggregateFeePercentageRaw(
+    scaleUp(protocolPct, 18),
+    scaleUp(creatorPct, 18)
+  );
+  if (aggregateRaw.le(ZERO_BI)) {
+    return [ZERO_BD, ZERO_BD];
+  }
+
+  let protocolPart = amount
+    .times(scaleUp(protocolPct, 18).toBigDecimal())
+    .div(aggregateRaw.toBigDecimal());
+  if (protocolPart.gt(amount)) {
+    protocolPart = amount;
+  }
+  if (protocolPart.lt(ZERO_BD)) {
+    protocolPart = ZERO_BD;
+  }
+  let creatorPart = amount.minus(protocolPart);
+  if (creatorPart.lt(ZERO_BD)) {
+    creatorPart = ZERO_BD;
+  }
   return [protocolPart, creatorPart];
 }
 
@@ -247,12 +279,15 @@ export function accrueVaultSwapFee(
   pool: Pool,
   swapFeeAmountRaw: BigInt
 ): void {
-  let aggregateFee = poolAggregateSwapFee(pool);
+  let aggregateFee = aggregateFeePercentage(
+    pool.protocolSwapFee,
+    pool.poolCreatorSwapFee
+  );
   let aggregateAmount = scaleDown(
-    mulDownSwapFee(swapFeeAmountRaw, aggregateFee),
+    mulDown(swapFeeAmountRaw, scaleUp(aggregateFee, 18)),
     poolToken.decimals
   );
-  let parts = splitAggregateFee(
+  let parts = splitAggregateAmount(
     aggregateAmount,
     pool.protocolSwapFee,
     pool.poolCreatorSwapFee
@@ -291,13 +326,13 @@ export function updateProtocolYieldFeeAmounts(pool: Pool): void {
       poolToken.vaultCreatorYieldFeeBalance
     );
     let delta = aggregateAmount.minus(previousAggregate);
-    let parts = splitAggregateFee(
+    let parts = splitAggregateAmount(
       delta.gt(ZERO_BD) ? delta : ZERO_BD,
       pool.protocolYieldFee,
       pool.poolCreatorYieldFee
     );
 
-    let split = splitAggregateFee(
+    let split = splitAggregateAmount(
       aggregateAmount,
       pool.protocolYieldFee,
       pool.poolCreatorYieldFee
@@ -316,49 +351,19 @@ export function updateProtocolYieldFeeAmounts(pool: Pool): void {
   }
 }
 
-/**
- * After a protocol fee collect, resync vault pending balances from chain.
- * Remaining aggregate is attributed first to any leftover protocol pending,
- * then to creator (creator share leaves the Vault in the same collect tx
- * without a dedicated event).
- */
-export function syncVaultAggregateSwapFeeFromChain(
-  poolToken: PoolToken,
-  pool: Pool
-): void {
-  let vault = VaultExtension.bind(changetype<Address>(pool.vault));
-  let call = vault.try_getAggregateSwapFeeAmount(
-    changetype<Address>(pool.address),
-    changetype<Address>(poolToken.address)
-  );
-  if (call.reverted) return;
-
-  let remaining = scaleDown(call.value, poolToken.decimals);
-  let protocolPending = poolToken.vaultProtocolSwapFeeBalance;
-  if (protocolPending.lt(ZERO_BD)) {
-    protocolPending = ZERO_BD;
-  }
-
-  let creatorBefore = poolToken.vaultCreatorSwapFeeBalance;
-
-  if (protocolPending.gt(remaining)) {
-    poolToken.vaultProtocolSwapFeeBalance = remaining;
-    poolToken.vaultCreatorSwapFeeBalance = ZERO_BD;
-  } else {
-    poolToken.vaultProtocolSwapFeeBalance = protocolPending;
-    poolToken.vaultCreatorSwapFeeBalance = remaining.minus(protocolPending);
-  }
-
-  let creatorMoved = creatorBefore.minus(
-    poolToken.vaultCreatorSwapFeeBalance
-  );
-  if (creatorMoved.gt(ZERO_BD)) {
-    poolToken.controllerCreatorFeeBalance =
-      poolToken.controllerCreatorFeeBalance.plus(creatorMoved);
-  }
-}
-
 export function updatePoolTokenRates(pool: Pool): void {
+  let poolTokens = pool.tokens.load();
+  // STANDARD tokens (tokenType 0) have a fixed rate of 1. Skip the eth_call
+  // unless some token can have a non-trivial rate.
+  let needsRates = false;
+  for (let i = 0; i < poolTokens.length; i++) {
+    if (poolTokens[i].tokenType != 0) {
+      needsRates = true;
+      break;
+    }
+  }
+  if (!needsRates) return;
+
   let vault = VaultExtension.bind(changetype<Address>(pool.vault));
   let ratesCall = vault.try_getPoolTokenRates(
     changetype<Address>(pool.address)
@@ -366,7 +371,6 @@ export function updatePoolTokenRates(pool: Pool): void {
   if (ratesCall.reverted) return;
 
   let tokenRates = ratesCall.value.value1;
-  let poolTokens = pool.tokens.load();
   for (let i = 0; i < poolTokens.length; i++) {
     let poolToken = poolTokens[i];
     let idx = poolToken.index;

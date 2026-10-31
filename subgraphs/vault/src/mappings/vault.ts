@@ -56,6 +56,7 @@ import { ERC20 } from "../types/Vault/ERC20";
 import { VaultExtension } from "../types/Vault/VaultExtension";
 import { ERC4626 } from "../types/Vault/ERC4626";
 import { mulDownSwapFee } from "../helpers/math";
+import { applyPendingPoolFeeInit } from "./controller";
 
 function scaleUpSwapFee(fee: BigDecimal): BigInt {
   return scaleUp(fee, 18);
@@ -164,6 +165,9 @@ export function handlePoolRegistered(event: PoolRegistered): void {
   pool.hookConfig = hookConfig.id;
   pool.hook = hook.id;
   pool.save();
+
+  // Fee-controller logs for this pool are emitted before PoolRegistered.
+  applyPendingPoolFeeInit(pool);
 
   // Parent pools that already listed this BPT as a token get nestedPool filled in.
   linkNestedPoolToPoolTokens(poolAddress);
@@ -379,8 +383,9 @@ export function handleSwap(event: SwapEvent): void {
   swap.swapFeeToken = event.params.tokenIn;
   swap.swapFeePercentage = swapFeePercentage;
   swap.hasDynamicSwapFee = hasDynamicSwapFee;
-  // Vault Swap events do not include the swapper; do not invent tx.from.
-  swap.user = ZERO_ADDRESS;
+  // Vault Swap has no swapper field. transaction.from is the account or router
+  // that submitted the swap (historical behaviour).
+  swap.user = event.transaction.from;
   swap.logIndex = event.logIndex;
   swap.blockNumber = event.block.number;
   swap.blockTimestamp = event.block.timestamp;

@@ -19,6 +19,7 @@ describe("Holders, rate providers, and late links", () => {
     expect(body).toMatch(/event\.params\.to\s*!=\s*ZERO_ADDRESS/);
     expect(body).toMatch(/event\.params\.from\s*!=\s*ZERO_ADDRESS/);
     expect(body).toMatch(/balance\.le\(\s*ZERO_BD\s*\)/);
+    expect(body).toMatch(/event\.params\.from\s*==\s*event\.params\.to/);
   });
 
   it("createRateProvider skips address(0)", () => {

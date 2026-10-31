@@ -287,7 +287,7 @@ type Swap @entity(immutable: true) {
   swapFeePercentage: BigDecimal!
   "Indicates whether the swap fee is dynamic"
   hasDynamicSwapFee: Boolean!
-  "User who performed the swap"
+  "Transaction sender for the swap (often a Router; the Vault event has no swapper)"
   user: Bytes!
   "Block number when the swap occurred"
   blockNumber: BigInt!
@@ -329,6 +329,20 @@ type AddRemove @entity(immutable: true) {
   transactionHash: Bytes!
   "Log index of the event in the transaction"
   logIndex: BigInt!
+}
+
+type PendingPoolFeeInit @entity(immutable: false) {
+  "Pool address. Written when fee-controller registration events precede PoolRegistered."
+  id: Bytes!
+  hasRegistration: Boolean!
+  poolCreator: Bytes!
+  protocolFeeExempt: Boolean!
+  hasSwapAggregate: Boolean!
+  aggregateSwapFee: BigDecimal!
+  swapFeeExempt: Boolean!
+  hasYieldAggregate: Boolean!
+  aggregateYieldFee: BigDecimal!
+  yieldFeeExempt: Boolean!
 }
 
 type PoolShare @entity(immutable: false) {

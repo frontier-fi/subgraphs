@@ -101,5 +101,10 @@ templates:
           handler: handleAmpUpdateStarted
         - event: AmpUpdateStopped(uint256)
           handler: handleAmpUpdateStopped
+      blockHandlers:
+        - handler: handleBlock
+          filter:
+            kind: polling
+            every: 120
       file: ./src/mappings/amp.ts
   {{/if}}

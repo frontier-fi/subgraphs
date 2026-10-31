@@ -51,6 +51,8 @@ export function handleTransfer(event: TransferEvent): void {
     ) {
       pool.holdersCount = pool.holdersCount.minus(BigInt.fromI32(1));
     }
+  } else if (event.params.from == event.params.to) {
+    // Self-transfer does not change balances or holder count.
   } else {
     let poolShareTo = getPoolShare(poolAddress, event.params.to);
     let poolShareFrom = getPoolShare(poolAddress, event.params.from);

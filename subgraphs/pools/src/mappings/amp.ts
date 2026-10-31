@@ -1,4 +1,4 @@
-import { Address, BigInt } from "@graphprotocol/graph-ts";
+import { Address, BigInt, dataSource, ethereum } from "@graphprotocol/graph-ts";
 import {
   AmpUpdateStarted,
   AmpUpdateStopped,
@@ -40,6 +40,42 @@ function syncCurrentAmp(stableParams: StableParams, poolAddress: Address): void 
   }
 }
 
+/** Advance a ramp from the stored schedule. Natural completion emits no event. */
+export function settleAmpRamp(stableParams: StableParams, now: BigInt): void {
+  if (!stableParams.ampIsUpdating) return;
+
+  if (now.ge(stableParams.ampEndTime)) {
+    stableParams.amp = stableParams.ampEndValue;
+    stableParams.ampIsUpdating = false;
+    return;
+  }
+
+  if (now.le(stableParams.ampStartTime)) {
+    stableParams.amp = stableParams.ampStartValue;
+    return;
+  }
+
+  let duration = stableParams.ampEndTime.minus(stableParams.ampStartTime);
+  if (duration.le(BigInt.fromI32(0))) {
+    stableParams.amp = stableParams.ampEndValue;
+    stableParams.ampIsUpdating = false;
+    return;
+  }
+
+  let elapsed = now.minus(stableParams.ampStartTime);
+  let delta = stableParams.ampEndValue.minus(stableParams.ampStartValue);
+  stableParams.amp = stableParams.ampStartValue.plus(
+    delta.times(elapsed).div(duration)
+  );
+}
+
+export function handleBlock(block: ethereum.Block): void {
+  let stableParams = StableParams.load(dataSource.address());
+  if (!stableParams || !stableParams.ampIsUpdating) return;
+  settleAmpRamp(stableParams, block.timestamp);
+  stableParams.save();
+}
+
 export function handleAmpUpdateStarted(event: AmpUpdateStarted): void {
   let stableParams = ensureStableParams(event.address);
   let precision = ampPrecision(event.address);
@@ -50,6 +86,7 @@ export function handleAmpUpdateStarted(event: AmpUpdateStarted): void {
   stableParams.ampStartTime = event.params.startTime;
   stableParams.ampEndTime = event.params.endTime;
   syncCurrentAmp(stableParams, event.address);
+  settleAmpRamp(stableParams, event.block.timestamp);
   stableParams.save();
 }
 

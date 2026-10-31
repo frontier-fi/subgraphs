@@ -38,6 +38,7 @@ describe("Schema and event fidelity", () => {
     expect(vaultTs).toMatch(/updatePoolTokenRates/);
     expect(entities).toMatch(/priceRate\s*=/);
     expect(entities).toMatch(/getPoolTokenRates/);
+    expect(entities).toMatch(/tokenType\s*!=\s*0/);
   });
 
   it("AddRemove records liquidity kind and totalSupply", () => {
@@ -50,12 +51,12 @@ describe("Schema and event fidelity", () => {
     expect(src).toMatch(/event\.params\.kind/);
   });
 
-  it("Swap.user is not blindly transaction.from", () => {
+  it("Swap.user is the transaction sender", () => {
     const body = extractFunction(
       readRepo("subgraphs/vault/src/mappings/vault.ts"),
       "handleSwap"
     )!;
-    expect(body).not.toMatch(/swap\.user\s*=\s*event\.transaction\.from/);
+    expect(body).toMatch(/swap\.user\s*=\s*event\.transaction\.from/);
   });
 
   it("PoolToken stores tokenType and StableParams stores amp ramp fields", () => {
