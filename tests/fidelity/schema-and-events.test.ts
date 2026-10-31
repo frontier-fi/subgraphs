@@ -57,6 +57,41 @@ describe("Schema and event fidelity", () => {
     )!;
     expect(body).not.toMatch(/swap\.user\s*=\s*event\.transaction\.from/);
   });
+
+  it("PoolToken stores tokenType and StableParams stores amp ramp fields", () => {
+    const poolToken = schemaFields(
+      "PoolToken",
+      "subgraphs/vault/schema.graphql"
+    );
+    expect(poolToken).toContain("tokenType");
+    expect(poolToken).toContain("vaultCreatorSwapFeeBalance");
+    const stable = schemaFields(
+      "StableParams",
+      "subgraphs/pools/schema.graphql"
+    );
+    for (const f of [
+      "ampIsUpdating",
+      "ampStartValue",
+      "ampEndValue",
+      "ampStartTime",
+      "ampEndTime",
+    ]) {
+      expect(stable).toContain(f);
+    }
+  });
+
+  it("LiquidityAddedToBuffer applies absolute bufferBalances like Wrap", () => {
+    const src = readRepo("subgraphs/vault/src/mappings/vault.ts");
+    for (const name of [
+      "handleLiquidityAddedToBuffer",
+      "handleLiquidityRemovedFromBuffer",
+      "handleWrap",
+      "handleUnwrap",
+    ] as const) {
+      const body = extractFunction(src, name)!;
+      expect(body).toMatch(/applyBufferBalancesFromEvent/);
+    }
+  });
 });
 
 describe("Pools factory versioning", () => {

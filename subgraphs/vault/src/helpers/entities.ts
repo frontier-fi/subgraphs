@@ -13,6 +13,7 @@ import { PoolRegisteredTokenConfigStruct } from "../types/Vault/Vault";
 import { ERC20 } from "../types/Vault/ERC20";
 import { VaultExtension } from "../types/Vault/VaultExtension";
 import { scaleDown } from "./misc";
+import { mulDownSwapFee } from "./math";
 import { ProtocolFeeController } from "../types/templates";
 
 export function getVault(): Vault {
@@ -88,6 +89,7 @@ export function createPoolToken(
   poolToken.pool = poolAddress;
   poolToken.address = tokenConfig.token;
   poolToken.index = index;
+  poolToken.tokenType = tokenConfig.tokenType;
   poolToken.priceRate = ONE_BD;
   poolToken.balance = ZERO_BD;
   poolToken.volume = ZERO_BD;
@@ -98,9 +100,14 @@ export function createPoolToken(
   poolToken.totalDynamicSwapFee = ZERO_BD;
   poolToken.totalProtocolSwapFee = ZERO_BD;
   poolToken.totalProtocolYieldFee = ZERO_BD;
+  poolToken.totalCreatorSwapFee = ZERO_BD;
+  poolToken.totalCreatorYieldFee = ZERO_BD;
   poolToken.controllerProtocolFeeBalance = ZERO_BD;
+  poolToken.controllerCreatorFeeBalance = ZERO_BD;
   poolToken.vaultProtocolSwapFeeBalance = ZERO_BD;
   poolToken.vaultProtocolYieldFeeBalance = ZERO_BD;
+  poolToken.vaultCreatorSwapFeeBalance = ZERO_BD;
+  poolToken.vaultCreatorYieldFeeBalance = ZERO_BD;
   poolToken.buffer = buffer ? buffer.id : null;
   poolToken.nestedPool = nestedPool ? nestedPool.id : null;
   poolToken.paysYieldFees = tokenConfig.paysYieldFees;
@@ -176,6 +183,58 @@ export function createPoolShare(
   return poolShare;
 }
 
+export function poolAggregateSwapFee(pool: Pool): BigDecimal {
+  return pool.protocolSwapFee.plus(pool.poolCreatorSwapFee);
+}
+
+export function poolAggregateYieldFee(pool: Pool): BigDecimal {
+  return pool.protocolYieldFee.plus(pool.poolCreatorYieldFee);
+}
+
+function splitAggregateFee(
+  aggregateAmount: BigDecimal,
+  protocolPct: BigDecimal,
+  creatorPct: BigDecimal
+): BigDecimal[] {
+  let totalPct = protocolPct.plus(creatorPct);
+  if (totalPct.equals(ZERO_BD) || aggregateAmount.equals(ZERO_BD)) {
+    return [ZERO_BD, ZERO_BD];
+  }
+  let protocolPart = aggregateAmount.times(protocolPct).div(totalPct);
+  let creatorPart = aggregateAmount.minus(protocolPart);
+  return [protocolPart, creatorPart];
+}
+
+/**
+ * Accrue vault-pending swap fees, split into protocol vs creator shares.
+ * `aggregateFeeAmountRaw` is swapFeeAmount (or per-token swap fee raw) before
+ * multiplying by the aggregate fee percentage.
+ */
+export function accrueVaultSwapFee(
+  poolToken: PoolToken,
+  pool: Pool,
+  swapFeeAmountRaw: BigInt
+): void {
+  let aggregateFee = poolAggregateSwapFee(pool);
+  let aggregateAmount = scaleDown(
+    mulDownSwapFee(swapFeeAmountRaw, aggregateFee),
+    poolToken.decimals
+  );
+  let parts = splitAggregateFee(
+    aggregateAmount,
+    pool.protocolSwapFee,
+    pool.poolCreatorSwapFee
+  );
+  poolToken.vaultProtocolSwapFeeBalance =
+    poolToken.vaultProtocolSwapFeeBalance.plus(parts[0]);
+  poolToken.vaultCreatorSwapFeeBalance =
+    poolToken.vaultCreatorSwapFeeBalance.plus(parts[1]);
+  poolToken.totalProtocolSwapFee = poolToken.totalProtocolSwapFee.plus(
+    parts[0]
+  );
+  poolToken.totalCreatorSwapFee = poolToken.totalCreatorSwapFee.plus(parts[1]);
+}
+
 export function updateProtocolYieldFeeAmounts(pool: Pool): void {
   let vault = VaultExtension.bind(changetype<Address>(pool.vault));
 
@@ -192,16 +251,78 @@ export function updateProtocolYieldFeeAmounts(pool: Pool): void {
 
     if (aggregateYieldFee.reverted) continue;
 
-    let yieldFeeAmount = scaleDown(aggregateYieldFee.value, poolToken.decimals);
-    let deltaYieldFee = yieldFeeAmount.minus(
-      poolToken.vaultProtocolYieldFeeBalance
+    let aggregateAmount = scaleDown(
+      aggregateYieldFee.value,
+      poolToken.decimals
     );
-    poolToken.vaultProtocolYieldFeeBalance = yieldFeeAmount;
+    let previousAggregate = poolToken.vaultProtocolYieldFeeBalance.plus(
+      poolToken.vaultCreatorYieldFeeBalance
+    );
+    let delta = aggregateAmount.minus(previousAggregate);
+    let parts = splitAggregateFee(
+      delta.gt(ZERO_BD) ? delta : ZERO_BD,
+      pool.protocolYieldFee,
+      pool.poolCreatorYieldFee
+    );
 
-    poolToken.totalProtocolYieldFee =
-      poolToken.totalProtocolYieldFee.plus(deltaYieldFee);
+    let split = splitAggregateFee(
+      aggregateAmount,
+      pool.protocolYieldFee,
+      pool.poolCreatorYieldFee
+    );
+    poolToken.vaultProtocolYieldFeeBalance = split[0];
+    poolToken.vaultCreatorYieldFeeBalance = split[1];
+
+    if (delta.gt(ZERO_BD)) {
+      poolToken.totalProtocolYieldFee =
+        poolToken.totalProtocolYieldFee.plus(parts[0]);
+      poolToken.totalCreatorYieldFee =
+        poolToken.totalCreatorYieldFee.plus(parts[1]);
+    }
 
     poolToken.save();
+  }
+}
+
+/**
+ * After a protocol fee collect, resync vault pending balances from chain.
+ * Remaining aggregate is attributed first to any leftover protocol pending,
+ * then to creator (creator share leaves the Vault in the same collect tx
+ * without a dedicated event).
+ */
+export function syncVaultAggregateSwapFeeFromChain(
+  poolToken: PoolToken,
+  pool: Pool
+): void {
+  let vault = VaultExtension.bind(changetype<Address>(pool.vault));
+  let call = vault.try_getAggregateSwapFeeAmount(
+    changetype<Address>(pool.address),
+    changetype<Address>(poolToken.address)
+  );
+  if (call.reverted) return;
+
+  let remaining = scaleDown(call.value, poolToken.decimals);
+  let protocolPending = poolToken.vaultProtocolSwapFeeBalance;
+  if (protocolPending.lt(ZERO_BD)) {
+    protocolPending = ZERO_BD;
+  }
+
+  let creatorBefore = poolToken.vaultCreatorSwapFeeBalance;
+
+  if (protocolPending.gt(remaining)) {
+    poolToken.vaultProtocolSwapFeeBalance = remaining;
+    poolToken.vaultCreatorSwapFeeBalance = ZERO_BD;
+  } else {
+    poolToken.vaultProtocolSwapFeeBalance = protocolPending;
+    poolToken.vaultCreatorSwapFeeBalance = remaining.minus(protocolPending);
+  }
+
+  let creatorMoved = creatorBefore.minus(
+    poolToken.vaultCreatorSwapFeeBalance
+  );
+  if (creatorMoved.gt(ZERO_BD)) {
+    poolToken.controllerCreatorFeeBalance =
+      poolToken.controllerCreatorFeeBalance.plus(creatorMoved);
   }
 }
 
@@ -223,6 +344,3 @@ export function updatePoolTokenRates(pool: Pool): void {
   }
 }
 
-export function poolAggregateSwapFee(pool: Pool): BigDecimal {
-  return pool.protocolSwapFee.plus(pool.poolCreatorSwapFee);
-}

@@ -29,6 +29,16 @@ type StableParams @entity(immutable: false) {
   id: Bytes!
   "Amplification parameter for Stable Pools"
   amp: BigInt!
+  "Whether an amplification update ramp is in progress"
+  ampIsUpdating: Boolean!
+  "Ramp start amplification value (raw)"
+  ampStartValue: BigInt!
+  "Ramp end amplification value (raw)"
+  ampEndValue: BigInt!
+  "Ramp start timestamp"
+  ampStartTime: BigInt!
+  "Ramp end timestamp"
+  ampEndTime: BigInt!
 }
 
 type EclpParams @entity(immutable: true) {

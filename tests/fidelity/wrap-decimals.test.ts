@@ -6,32 +6,27 @@ function scaleDown(raw: bigint, decimals: number): number {
 }
 
 describe("Buffer Wrap/Unwrap decimal scaling", () => {
-  it("handleWrap scales each balance with its own token decimals", () => {
-    const body = extractFunction(
-      readRepo("subgraphs/vault/src/mappings/vault.ts"),
-      "handleWrap"
-    );
+  it("applyBufferBalancesFromEvent scales each balance with its own token decimals", () => {
+    const src = readRepo("subgraphs/vault/src/mappings/vault.ts");
+    const body = extractFunction(src, "applyBufferBalancesFromEvent");
     expect(body).toBeTruthy();
     expect(body!).toMatch(
-      /underlyingBalance\s*=\s*scaleDown\(\s*hexToBigInt\(underlyingBalance\),\s*underlyingToken\.decimals/s
+      /wrappedBalance\s*=\s*scaleDown\(\s*decoded\.wrappedRaw,\s*wrappedToken\.decimals/s
     );
     expect(body!).toMatch(
-      /wrappedBalance\s*=\s*scaleDown\(\s*hexToBigInt\(wrappedBalance\),\s*wrappedToken\.decimals/s
+      /underlyingBalance\s*=\s*scaleDown\(\s*decoded\.underlyingRaw,\s*underlyingToken\.decimals/s
     );
   });
 
-  it("handleUnwrap scales each balance with its own token decimals", () => {
-    const body = extractFunction(
-      readRepo("subgraphs/vault/src/mappings/vault.ts"),
-      "handleUnwrap"
-    );
-    expect(body).toBeTruthy();
-    expect(body!).toMatch(
-      /underlyingBalance\s*=\s*scaleDown\(\s*hexToBigInt\(underlyingBalance\),\s*underlyingToken\.decimals/s
-    );
-    expect(body!).toMatch(
-      /wrappedBalance\s*=\s*scaleDown\(\s*hexToBigInt\(wrappedBalance\),\s*wrappedToken\.decimals/s
-    );
+  it("handleWrap and handleUnwrap apply absolute bufferBalances via shared helper", () => {
+    const src = readRepo("subgraphs/vault/src/mappings/vault.ts");
+    for (const name of ["handleWrap", "handleUnwrap"] as const) {
+      const body = extractFunction(src, name);
+      expect(body).toBeTruthy();
+      expect(body!).toMatch(
+        /applyBufferBalancesFromEvent\(\s*buffer,\s*event\.params\.bufferBalances\s*\)/
+      );
+    }
   });
 
   it("correct scaling keeps human balances when decimals differ (18 vs 6)", () => {

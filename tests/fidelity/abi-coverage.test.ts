@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   eventNamesFromAbi,
+  extractFunction,
   handlersFromTemplate,
+  readRepo,
 } from "./helpers/source";
 
 /** ERC20 / unused Vault noise that does not need indexing for fidelity. */
@@ -37,6 +39,26 @@ describe("ABI ↔ template handler coverage", () => {
     const template = handlersFromTemplate("subgraphs/pools/template.yaml");
     expect(template.has("AmpUpdateStarted")).toBe(true);
     expect(template.has("AmpUpdateStopped")).toBe(true);
+  });
+
+  it("AmpUpdateStarted persists ramp schedule fields", () => {
+    const body = extractFunction(
+      readRepo("subgraphs/pools/src/mappings/amp.ts"),
+      "handleAmpUpdateStarted"
+    )!;
+    expect(body).toMatch(/ampIsUpdating\s*=\s*true/);
+    expect(body).toMatch(/ampStartValue\s*=\s*event\.params\.startValue/);
+    expect(body).toMatch(/ampEndValue\s*=\s*event\.params\.endValue/);
+    expect(body).toMatch(/ampStartTime\s*=\s*event\.params\.startTime/);
+    expect(body).toMatch(/ampEndTime\s*=\s*event\.params\.endTime/);
+  });
+
+  it("BufferShares mint and burn use the same BufferShare id scheme", () => {
+    const src = readRepo("subgraphs/vault/src/mappings/vault.ts");
+    const mint = extractFunction(src, "handleBufferSharesMinted")!;
+    const burn = extractFunction(src, "handleBufferSharesBurned")!;
+    expect(mint).toMatch(/buffer\.id\.concat\(\s*event\.params\.to\s*\)/);
+    expect(burn).toMatch(/buffer\.id\.concat\(\s*event\.params\.from\s*\)/);
   });
 
   it("keeps core vault lifecycle events wired", () => {

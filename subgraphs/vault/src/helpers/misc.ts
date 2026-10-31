@@ -1,4 +1,32 @@
-import { BigDecimal, BigInt } from "@graphprotocol/graph-ts";
+import { BigDecimal, BigInt, Bytes } from "@graphprotocol/graph-ts";
+
+export class BufferBalances {
+  wrappedRaw: BigInt;
+  underlyingRaw: BigInt;
+
+  constructor(wrappedRaw: BigInt, underlyingRaw: BigInt) {
+    this.wrappedRaw = wrappedRaw;
+    this.underlyingRaw = underlyingRaw;
+  }
+}
+
+/**
+ * Vault encodes bufferBalances as:
+ * [ 16 bytes wrappedBalance | 16 bytes underlyingBalance ]
+ */
+export function decodeBufferBalances(bufferBalances: Bytes): BufferBalances {
+  let hex = bufferBalances.toHex().slice(2);
+  // Pad to 64 hex chars (32 bytes) if needed
+  while (hex.length < 64) {
+    hex = "0" + hex;
+  }
+  let wrappedBalance = hex.slice(0, 32);
+  let underlyingBalance = hex.slice(32, 64);
+  return new BufferBalances(
+    hexToBigInt(wrappedBalance),
+    hexToBigInt(underlyingBalance)
+  );
+}
 
 export function hexToBigInt(hex: string): BigInt {
   let hexUpper = hex.toUpperCase();

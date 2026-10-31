@@ -25,10 +25,10 @@ export function extractAddressLiteral(source: string, binding: string): string |
   return m ? m[1] : null;
 }
 
-/** Pull a contiguous function body by matching braces from `export function name`. */
+/** Pull a contiguous function body by matching braces from `function name` (export optional). */
 export function extractFunction(source: string, name: string): string | null {
   const start = source.search(
-    new RegExp(`export function ${name}\\s*\\(`)
+    new RegExp(`(?:export\\s+)?function ${name}\\s*\\(`)
   );
   if (start < 0) return null;
 

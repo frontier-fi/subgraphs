@@ -11,7 +11,9 @@ function scaleUpFee(pct: number): bigint {
 
 describe("Swap / protocol fee accounting", () => {
   it("vault pending swap-fee accrual uses aggregate (protocol + creator), not protocol alone", () => {
-    const src = readRepo("subgraphs/vault/src/mappings/vault.ts");
+    const vaultSrc = readRepo("subgraphs/vault/src/mappings/vault.ts");
+    const entitiesSrc = readRepo("subgraphs/vault/src/helpers/entities.ts");
+    const src = vaultSrc + "\n" + entitiesSrc;
     const usesProtocolOnly = /mulDownSwapFee\([^)]*pool\.protocolSwapFee\)/.test(
       src
     );
@@ -22,6 +24,8 @@ describe("Swap / protocol fee accounting", () => {
 
     expect(usesProtocolOnly).toBe(false);
     expect(combinesCreator).toBe(true);
+    expect(entitiesSrc).toMatch(/vaultCreatorSwapFeeBalance/);
+    expect(vaultSrc).toMatch(/accrueVaultSwapFee/);
   });
 
   it("aggregate fee is larger than protocol-only when creator fee > 0", () => {
@@ -67,5 +71,24 @@ describe("Swap / protocol fee accounting", () => {
     )!;
     expect(body).not.toMatch(/vaultProtocolYieldFeeBalance\s*=\s*ZERO_BD/);
     expect(body).toMatch(/vaultProtocolYieldFeeBalance\.minus/);
+  });
+
+  it("PoolCreatorFeesWithdrawn decrements controllerCreatorFeeBalance", () => {
+    const body = extractFunction(
+      readRepo("subgraphs/vault/src/mappings/controller.ts"),
+      "handlePoolCreatorFeesWithdrawn"
+    )!;
+    expect(body).toMatch(/controllerCreatorFeeBalance\.minus/);
+  });
+
+  it("InitialPoolAggregateSwapFee does not overwrite protocol with full aggregate when creator fee exists", () => {
+    const body = extractFunction(
+      readRepo("subgraphs/vault/src/mappings/controller.ts"),
+      "handleInitialPoolAggregateSwapFeePercentage"
+    )!;
+    expect(body).toMatch(/aggregate\.minus\(\s*pool\.poolCreatorSwapFee\s*\)/);
+    expect(body).not.toMatch(
+      /pool\.protocolSwapFee\s*=\s*scaleDown\(\s*event\.params\.aggregateSwapFeePercentage/
+    );
   });
 });

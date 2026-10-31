@@ -72,6 +72,10 @@ type Pool @entity(immutable: false) {
   poolCreatorSwapFee: BigDecimal!
   "Pool creator yield fee percentage"
   poolCreatorYieldFee: BigDecimal!
+  "Vault aggregate swap fee percentage (protocol + creator)"
+  aggregateSwapFee: BigDecimal!
+  "Vault aggregate yield fee percentage (protocol + creator)"
+  aggregateYieldFee: BigDecimal!
 
   "Total number of swaps performed in this Pool"
   swapsCount: BigInt!
@@ -152,6 +156,8 @@ type PoolToken @entity(immutable: false) {
   decimals: Int!
   "Address of the token"
   address: Bytes!
+  "TokenType enum from PoolRegistered (0=STANDARD, 1=TOKEN_WITH_RATE, 2=ERC4626)"
+  tokenType: Int!
   "Current balance of this token in the Pool"
   balance: BigDecimal!
   "Total volume of this token traded in the Pool"
@@ -178,14 +184,24 @@ type PoolToken @entity(immutable: false) {
   totalProtocolSwapFee: BigDecimal!
   "Total protocol yield fees collected for this token"
   totalProtocolYieldFee: BigDecimal!
+  "Total pool-creator swap fees accrued for this token"
+  totalCreatorSwapFee: BigDecimal!
+  "Total pool-creator yield fees accrued for this token"
+  totalCreatorYieldFee: BigDecimal!
   "Indicates whether this token pays yield fees"
   paysYieldFees: Boolean!
   "Protocol fees available for withdrawal from the Controlller"
   controllerProtocolFeeBalance: BigDecimal!
+  "Pool-creator fees available for withdrawal from the Controller"
+  controllerCreatorFeeBalance: BigDecimal!
   "Protocol swap fees pending collection in the Vault"
   vaultProtocolSwapFeeBalance: BigDecimal!
   "Protocol yield fees pending collection in the Vault"
   vaultProtocolYieldFeeBalance: BigDecimal!
+  "Pool-creator swap fees pending collection in the Vault"
+  vaultCreatorSwapFeeBalance: BigDecimal!
+  "Pool-creator yield fees pending collection in the Vault"
+  vaultCreatorYieldFeeBalance: BigDecimal!
 }
 
 type Token @entity(immutable: false) {
