@@ -8,6 +8,5 @@ export const ZERO_ADDRESS = Address.fromString(
   "0x0000000000000000000000000000000000000000"
 );
 
-export let VAULT_ADDRESS = Address.fromString(
-  "0xbA1333333333a1BA1108E8412f11850A5C319bA9"
-);
+// Generated from networks.json — do not edit constants.ts directly.
+export let VAULT_ADDRESS = Address.fromString("{{ Vault.address }}");

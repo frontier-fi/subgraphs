@@ -6,9 +6,15 @@
     "pools": "pnpm --filter @subgraphs/pools",
     "vault": "pnpm --filter @subgraphs/vault",
     "codegen": "pnpm -r codegen subgraph.sepolia.yaml",
-    "build:all": "bash scripts/build-all.sh"
+    "build:all": "bash scripts/build-all.sh",
+    "test": "vitest run",
+    "test:fidelity": "vitest run tests/fidelity",
+    "test:watch": "vitest"
   },
   "prettier": {
     "trailingComma": "es5"
+  },
+  "devDependencies": {
+    "vitest": "3.2.4"
   }
 }

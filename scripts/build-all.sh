@@ -19,6 +19,13 @@ for pkg in vault pools; do
 
   for manifest in "${manifests[@]}"; do
     file="$(basename "$manifest")"
+    # subgraph.<network>.yaml → network (keeps vault constants.ts in sync per build)
+    network="${file#subgraph.}"
+    network="${network%.yaml}"
+    if [ "$pkg" = "vault" ]; then
+      echo ":: generating vault constants for ${network}"
+      GENERATE_NETWORK="$network" pnpm generate-manifests
+    fi
     echo ":: building ${pkg} (${file})"
     pnpm "$pkg" build "$file"
   done

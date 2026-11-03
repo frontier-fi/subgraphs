@@ -22,6 +22,7 @@ dataSources:
       entities:
         - Vault
         - Pool
+        - BufferWrapUnwrap
       abis:
         - name: ERC20
           file: ./abis/ERC20.json
@@ -62,6 +63,16 @@ dataSources:
           handler: handlePoolPausedStateChanged
         - event: ProtocolFeeControllerChanged(indexed address)
           handler: handleProtocolFeeControllerChanged
+        - event: AuthorizerChanged(indexed address)
+          handler: handleAuthorizerChanged
+        - event: VaultPausedStateChanged(bool)
+          handler: handleVaultPausedStateChanged
+        - event: VaultBuffersPausedStateChanged(bool)
+          handler: handleVaultBuffersPausedStateChanged
+        - event: AggregateSwapFeePercentageChanged(indexed address,uint256)
+          handler: handleAggregateSwapFeePercentageChanged
+        - event: AggregateYieldFeePercentageChanged(indexed address,uint256)
+          handler: handleAggregateYieldFeePercentageChanged
       file: ./src/mappings/vault.ts
 templates:
   - kind: ethereum/contract
@@ -118,4 +129,12 @@ templates:
           handler: handleProtocolYieldFeeCollected
         - event: ProtocolFeesWithdrawn(indexed address,indexed address,indexed address,uint256)
           handler: handleProtocolFeesWithdrawn
+        - event: InitialPoolAggregateSwapFeePercentage(indexed address,uint256,bool)
+          handler: handleInitialPoolAggregateSwapFeePercentage
+        - event: InitialPoolAggregateYieldFeePercentage(indexed address,uint256,bool)
+          handler: handleInitialPoolAggregateYieldFeePercentage
+        - event: PoolCreatorFeesWithdrawn(indexed address,indexed address,indexed address,uint256)
+          handler: handlePoolCreatorFeesWithdrawn
+        - event: PoolRegisteredWithFeeController(indexed address,indexed address,bool)
+          handler: handlePoolRegisteredWithFeeController
       file: ./src/mappings/controller.ts

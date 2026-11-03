@@ -4,7 +4,7 @@ enum PoolType {
   ECLP
 }
 
-type Factory @entity(immutable: true) {
+type Factory @entity(immutable: false) {
   "Unique identifier for the Factory"
   id: Bytes!
   "Address of the Factory contract"
@@ -24,11 +24,21 @@ type WeightedParams @entity(immutable: true) {
   weights: [BigDecimal!]!
 }
 
-type StableParams @entity(immutable: true) {
+type StableParams @entity(immutable: false) {
   "Unique identifier for the StablePoolParams"
   id: Bytes!
   "Amplification parameter for Stable Pools"
   amp: BigInt!
+  "Set by AmpUpdateStarted, cleared by AmpUpdateStopped. A ramp that completes naturally emits no event, so compare ampEndTime to the current time"
+  ampIsUpdating: Boolean!
+  "Ramp start amplification value (divided by AMP_PRECISION, fraction kept)"
+  ampStartValue: BigDecimal!
+  "Ramp end amplification value (divided by AMP_PRECISION, fraction kept)"
+  ampEndValue: BigDecimal!
+  "Ramp start timestamp"
+  ampStartTime: BigInt!
+  "Ramp end timestamp"
+  ampEndTime: BigInt!
 }
 
 type EclpParams @entity(immutable: true) {
@@ -50,7 +60,7 @@ type EclpParams @entity(immutable: true) {
   dSq: BigDecimal!
 }
 
-type Pool @entity(immutable: true) {
+type Pool @entity(immutable: false) {
   "Unique identifier for the Pool"
   id: Bytes!
   "Address of the Pool contract"

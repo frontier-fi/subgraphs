@@ -7,6 +7,8 @@ type Vault @entity(immutable: false) {
   protocolFeeController: Bytes!
   "Indicates whether the Vault is currently paused"
   isPaused: Boolean!
+  "Indicates whether ERC4626 buffers are currently paused"
+  isBuffersPaused: Boolean!
   "Protocol swap fee percentage"
   protocolSwapFee: BigDecimal!
   "Protocol yield fee percentage"
@@ -52,7 +54,8 @@ type Pool @entity(immutable: false) {
   isPaused: Boolean!
   "Indicates whether the Pool is in recovery mode"
   isInRecoveryMode: Boolean!
-
+  "Indicates whether this pool is exempt from protocol fees"
+  protocolFeeExempt: Boolean!
 
   "Account empowered to pause/unpause the pool"
   pauseManager: Bytes!
@@ -69,6 +72,10 @@ type Pool @entity(immutable: false) {
   poolCreatorSwapFee: BigDecimal!
   "Pool creator yield fee percentage"
   poolCreatorYieldFee: BigDecimal!
+  "Vault aggregate swap fee percentage (protocol + creator)"
+  aggregateSwapFee: BigDecimal!
+  "Vault aggregate yield fee percentage (protocol + creator)"
+  aggregateYieldFee: BigDecimal!
 
   "Total number of swaps performed in this Pool"
   swapsCount: BigInt!
@@ -149,6 +156,12 @@ type PoolToken @entity(immutable: false) {
   decimals: Int!
   "Address of the token"
   address: Bytes!
+  "Token entity for this pool token (same id as address)"
+  token: Token!
+  "TokenType enum from PoolRegistered (0=STANDARD, 1=TOKEN_WITH_RATE, 2=ERC4626)"
+  tokenType: Int!
+  "Rate provider from PoolRegistered. Zero address when the token has none."
+  rateProvider: Bytes!
   "Current balance of this token in the Pool"
   balance: BigDecimal!
   "Total volume of this token traded in the Pool"
@@ -159,9 +172,9 @@ type PoolToken @entity(immutable: false) {
   totalSwapFeeBase: BigDecimal!
   "Total difference in swap fees collected due to dynamic fees"
   totalSwapFeeDelta: BigDecimal!
-  "Total static swap fees collected for this token"
+  "Total swap fees from swaps at the pool's static fee percentage"
   totalStaticSwapFee: BigDecimal!
-  "Total dynamic swap fees collected for this token"
+  "Total swap fees from swaps at a dynamic (hook) fee percentage; static + dynamic = totalSwapFee"
   totalDynamicSwapFee: BigDecimal!
   "Buffer associated with this token, if any"
   buffer: Buffer
@@ -175,14 +188,24 @@ type PoolToken @entity(immutable: false) {
   totalProtocolSwapFee: BigDecimal!
   "Total protocol yield fees collected for this token"
   totalProtocolYieldFee: BigDecimal!
+  "Total pool-creator swap fees accrued for this token"
+  totalCreatorSwapFee: BigDecimal!
+  "Total pool-creator yield fees accrued for this token"
+  totalCreatorYieldFee: BigDecimal!
   "Indicates whether this token pays yield fees"
   paysYieldFees: Boolean!
   "Protocol fees available for withdrawal from the Controlller"
   controllerProtocolFeeBalance: BigDecimal!
+  "Pool-creator fees available for withdrawal from the Controller"
+  controllerCreatorFeeBalance: BigDecimal!
   "Protocol swap fees pending collection in the Vault"
   vaultProtocolSwapFeeBalance: BigDecimal!
   "Protocol yield fees pending collection in the Vault"
   vaultProtocolYieldFeeBalance: BigDecimal!
+  "Pool-creator swap fees pending collection in the Vault"
+  vaultCreatorSwapFeeBalance: BigDecimal!
+  "Pool-creator yield fees pending collection in the Vault"
+  vaultCreatorYieldFeeBalance: BigDecimal!
 }
 
 type Token @entity(immutable: false) {
@@ -196,6 +219,12 @@ type Token @entity(immutable: false) {
   decimals: Int!
   "Address of the token"
   address: Bytes!
+  "Whether this token is an ERC4626 wrapped token (asset() succeeded)"
+  isErc4626: Boolean!
+  "Underlying asset Token if this token is an ERC4626 vault"
+  underlyingToken: Token
+  "PoolToken rows that reference this token"
+  poolTokens: [PoolToken!] @derivedFrom(field: "token")
 }
 
 type RateProvider @entity(immutable: false) {
@@ -222,6 +251,33 @@ type Buffer @entity(immutable: false) {
   underlyingBalance: BigDecimal!
   "Total shares of this Buffer"
   totalShares: BigDecimal!
+}
+
+enum WrapType {
+  Wrap
+  Unwrap
+}
+
+type BufferWrapUnwrap @entity(immutable: true) {
+  id: Bytes!
+  buffer: Buffer!
+  type: WrapType!
+  wrappedToken: Bytes!
+  underlyingToken: Bytes!
+  "Wrapped shares minted (Wrap) or burned (Unwrap)"
+  amountWrapped: BigDecimal!
+  "Underlying assets deposited (Wrap) or withdrawn (Unwrap)"
+  amountUnderlying: BigDecimal!
+  "Post-operation buffer wrapped balance"
+  wrappedBalance: BigDecimal!
+  "Post-operation buffer underlying balance"
+  underlyingBalance: BigDecimal!
+  "Transaction sender (event.transaction.from)"
+  user: Bytes!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  logIndex: BigInt!
 }
 
 type BufferShare @entity(immutable: false) {
@@ -264,7 +320,7 @@ type Swap @entity(immutable: true) {
   swapFeePercentage: BigDecimal!
   "Indicates whether the swap fee is dynamic"
   hasDynamicSwapFee: Boolean!
-  "User who performed the swap"
+  "Transaction sender for the swap (often a Router; the Vault event has no swapper)"
   user: Bytes!
   "Block number when the swap occurred"
   blockNumber: BigInt!
@@ -286,6 +342,10 @@ type AddRemove @entity(immutable: true) {
   id: Bytes!
   "Type of investment (Add or Remove)"
   type: InvestType!
+  "AddLiquidityKind / RemoveLiquidityKind enum value from the Vault event"
+  kind: Int!
+  "BPT total supply after the operation"
+  totalSupply: BigDecimal!
   "Address of the sender"
   sender: Bytes!
   "Amounts of tokens added or removed"
@@ -302,6 +362,20 @@ type AddRemove @entity(immutable: true) {
   transactionHash: Bytes!
   "Log index of the event in the transaction"
   logIndex: BigInt!
+}
+
+type PendingPoolFeeInit @entity(immutable: false) {
+  "Pool address. Written when fee-controller registration events precede PoolRegistered."
+  id: Bytes!
+  hasRegistration: Boolean!
+  poolCreator: Bytes!
+  protocolFeeExempt: Boolean!
+  hasSwapAggregate: Boolean!
+  aggregateSwapFee: BigDecimal!
+  swapFeeExempt: Boolean!
+  hasYieldAggregate: Boolean!
+  aggregateYieldFee: BigDecimal!
+  yieldFeeExempt: Boolean!
 }
 
 type PoolShare @entity(immutable: false) {

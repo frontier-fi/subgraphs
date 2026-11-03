@@ -76,6 +76,12 @@ for network in "${NETWORKS[@]}"; do
 
   echo "Deploying ${SUBGRAPH_NAME}..."
   echo "  Version: ${VERSION}"
+
+  if [ "$SUBGRAPH_TYPE" = "vault" ]; then
+    echo "  Generating vault constants for ${network}"
+    (cd "$ROOT" && GENERATE_NETWORK="$network" pnpm generate-manifests)
+  fi
+
   echo "  Deploying..."
 
   LOG="$(mktemp)"

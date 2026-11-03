@@ -11,6 +11,7 @@ import {
   tauVectorsAreNormalized,
 } from "../helpers/eclp";
 import { scaleDown } from "../helpers/math";
+import { getFactoryVersion } from "../helpers/version";
 
 /**
  * Reads the raw ECLP parameters, or null if the pool exposes neither reader. Newer pools expose the flat
@@ -129,9 +130,11 @@ function createEclpPool(
 }
 
 export function handleEclpPoolCreated(event: PoolCreated): void {
-  createEclpPool(
-    event.params.pool,
-    event.address, // Factory
-    2
-  );
+  let pool = GyroECLPPool.bind(event.params.pool);
+  let versionCall = pool.try_version();
+  let factoryVersion = versionCall.reverted
+    ? 0
+    : getFactoryVersion(versionCall.value);
+
+  createEclpPool(event.params.pool, event.address, factoryVersion);
 }

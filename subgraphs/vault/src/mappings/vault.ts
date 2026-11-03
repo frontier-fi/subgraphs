@@ -2,10 +2,15 @@ import {
   Address,
   BigDecimal,
   BigInt,
+  Bytes,
   dataSource,
+  ethereum,
   log,
 } from "@graphprotocol/graph-ts";
 import {
+  AggregateSwapFeePercentageChanged,
+  AggregateYieldFeePercentageChanged,
+  AuthorizerChanged,
   BufferSharesBurned,
   BufferSharesMinted,
   LiquidityAdded,
@@ -19,11 +24,14 @@ import {
   Swap as SwapEvent,
   SwapFeePercentageChanged,
   Unwrap,
+  VaultBuffersPausedStateChanged,
+  VaultPausedStateChanged,
   Wrap,
 } from "../types/Vault/Vault";
 import {
   Buffer,
   BufferShare,
+  BufferWrapUnwrap,
   Pool,
   Swap,
   AddRemove,
@@ -32,20 +40,29 @@ import {
   LiquidityManagement,
 } from "../types/schema";
 import {
+  accrueVaultSwapFee,
   createPoolToken,
   createRateProvider,
+  linkBufferToPoolTokens,
+  linkNestedPoolToPoolTokens,
   getToken,
   getVault,
+  probeErc4626,
   loadPoolToken,
+  updatePoolTokenRates,
   updateProtocolYieldFeeAmounts,
 } from "../helpers/entities";
 import { ZERO_ADDRESS, ZERO_BD, ZERO_BI } from "../helpers/constants";
-import { hexToBigInt, scaleDown, scaleUp } from "../helpers/misc";
+import { decodeBufferBalances, scaleDown, scaleUp } from "../helpers/misc";
 import { BPT, ProtocolFeeController } from "../types/templates";
 import { ERC20 } from "../types/Vault/ERC20";
 import { VaultExtension } from "../types/Vault/VaultExtension";
-import { ERC4626 } from "../types/Vault/ERC4626";
 import { mulDownSwapFee } from "../helpers/math";
+import { applyPendingPoolFeeInit } from "./controller";
+
+function scaleUpSwapFee(fee: BigDecimal): BigInt {
+  return scaleUp(fee, 18);
+}
 
 /************************************
  ******* POOLS REGISTRATIONS ********
@@ -70,6 +87,9 @@ export function handlePoolRegistered(event: PoolRegistered): void {
   pool.protocolYieldFee = vault.protocolYieldFee;
   pool.poolCreatorSwapFee = ZERO_BD;
   pool.poolCreatorYieldFee = ZERO_BD;
+  pool.aggregateSwapFee = vault.protocolSwapFee;
+  pool.aggregateYieldFee = vault.protocolYieldFee;
+  pool.protocolFeeExempt = false;
 
   pool.swapFeeManager = event.params.roleAccounts.swapFeeManager;
   pool.pauseManager = event.params.roleAccounts.pauseManager;
@@ -95,6 +115,10 @@ export function handlePoolRegistered(event: PoolRegistered): void {
 
   for (let i: i32 = 0; i < event.params.tokenConfig.length; i++) {
     let tokenConfig = event.params.tokenConfig[i];
+    // Flag ERC-4626 tokens; the Buffer itself is created on buffer events.
+    if (tokenConfig.tokenType != 0) {
+      probeErc4626(tokenConfig.token);
+    }
     createPoolToken(poolAddress, tokenConfig, i);
     createRateProvider(poolAddress, tokenConfig);
   }
@@ -148,6 +172,12 @@ export function handlePoolRegistered(event: PoolRegistered): void {
   pool.hook = hook.id;
   pool.save();
 
+  // Fee-controller logs for this pool are emitted before PoolRegistered.
+  applyPendingPoolFeeInit(pool);
+
+  // Parent pools that already listed this BPT as a token get nestedPool filled in.
+  linkNestedPoolToPoolTokens(poolAddress);
+
   BPT.create(poolAddress);
 }
 
@@ -186,31 +216,28 @@ export function handleLiquidityAdded(event: LiquidityAdded): void {
   for (let i: i32 = 0; i < poolTokens.length; i++) {
     let poolToken = poolTokens[i];
     let joinAmount = scaleDown(
-      event.params.amountsAddedRaw[i],
+      event.params.amountsAddedRaw[poolToken.index],
       poolToken.decimals
     );
-    joinAmounts[i] = joinAmount;
+    joinAmounts[poolToken.index] = joinAmount;
 
     poolToken.balance = scaleDown(
-      poolTokensInfo.getBalancesRaw()[i],
+      poolTokensInfo.getBalancesRaw()[poolToken.index],
       poolToken.decimals
     );
 
-    let aggregateSwapFeeAmount = scaleDown(
-      mulDownSwapFee(event.params.swapFeeAmountsRaw[i], pool.protocolSwapFee),
-      poolToken.decimals
-    );
-
-    poolToken.vaultProtocolSwapFeeBalance =
-      poolToken.vaultProtocolSwapFeeBalance.plus(aggregateSwapFeeAmount);
-    poolToken.totalProtocolSwapFee = poolToken.totalProtocolSwapFee.plus(
-      aggregateSwapFeeAmount
+    accrueVaultSwapFee(
+      poolToken,
+      pool,
+      event.params.swapFeeAmountsRaw[poolToken.index]
     );
 
     poolToken.save();
   }
 
   join.type = "Add";
+  join.kind = event.params.kind;
+  join.totalSupply = scaleDown(event.params.totalSupply, 18);
   join.sender = event.params.liquidityProvider;
   join.amounts = joinAmounts;
   join.pool = poolAddress;
@@ -221,10 +248,11 @@ export function handleLiquidityAdded(event: LiquidityAdded): void {
   join.transactionHash = transactionHash;
 
   const storeEventsFrom = dataSource.context().get("storeEventsFrom");
-  if (storeEventsFrom && event.block.number > storeEventsFrom.toBigInt()) {
+  if (storeEventsFrom && event.block.number >= storeEventsFrom.toBigInt()) {
     join.save();
   }
 
+  updatePoolTokenRates(pool);
   updateProtocolYieldFeeAmounts(pool);
 }
 
@@ -256,31 +284,28 @@ export function handleLiquidityRemoved(event: LiquidityRemoved): void {
   for (let i: i32 = 0; i < poolTokens.length; i++) {
     let poolToken = poolTokens[i];
     let exitAmount = scaleDown(
-      event.params.amountsRemovedRaw[i],
+      event.params.amountsRemovedRaw[poolToken.index],
       poolToken.decimals
     );
-    exitAmounts[i] = exitAmount;
+    exitAmounts[poolToken.index] = exitAmount;
 
     poolToken.balance = scaleDown(
-      poolTokensInfo.getBalancesRaw()[i],
+      poolTokensInfo.getBalancesRaw()[poolToken.index],
       poolToken.decimals
     );
 
-    let aggregateSwapFeeAmount = scaleDown(
-      mulDownSwapFee(event.params.swapFeeAmountsRaw[i], pool.protocolSwapFee),
-      poolToken.decimals
-    );
-
-    poolToken.vaultProtocolSwapFeeBalance =
-      poolToken.vaultProtocolSwapFeeBalance.plus(aggregateSwapFeeAmount);
-    poolToken.totalProtocolSwapFee = poolToken.totalProtocolSwapFee.plus(
-      aggregateSwapFeeAmount
+    accrueVaultSwapFee(
+      poolToken,
+      pool,
+      event.params.swapFeeAmountsRaw[poolToken.index]
     );
 
     poolToken.save();
   }
 
   exit.type = "Remove";
+  exit.kind = event.params.kind;
+  exit.totalSupply = scaleDown(event.params.totalSupply, 18);
   exit.sender = event.params.liquidityProvider;
   exit.amounts = exitAmounts;
   exit.pool = poolAddress;
@@ -291,10 +316,11 @@ export function handleLiquidityRemoved(event: LiquidityRemoved): void {
   exit.transactionHash = transactionHash;
 
   const storeEventsFrom = dataSource.context().get("storeEventsFrom");
-  if (storeEventsFrom && event.block.number > storeEventsFrom.toBigInt()) {
+  if (storeEventsFrom && event.block.number >= storeEventsFrom.toBigInt()) {
     exit.save();
   }
 
+  updatePoolTokenRates(pool);
   updateProtocolYieldFeeAmounts(pool);
 }
 
@@ -332,7 +358,10 @@ export function handleSwap(event: SwapEvent): void {
 
   let swapFeePercentage = scaleDown(event.params.swapFeePercentage, 18);
 
-  let hasDynamicSwapFee = pool.swapFee != swapFeePercentage;
+  // Compare at 1e18 fixed-point to avoid BigDecimal false dynamic detection.
+  let hasDynamicSwapFee = event.params.swapFeePercentage.notEqual(
+    scaleUpSwapFee(pool.swapFee)
+  );
   let swapFeeBaseAmount = swapFeeAmount;
   let swapFeeDeltaAmount = ZERO_BD;
   if (hasDynamicSwapFee) {
@@ -360,6 +389,8 @@ export function handleSwap(event: SwapEvent): void {
   swap.swapFeeToken = event.params.tokenIn;
   swap.swapFeePercentage = swapFeePercentage;
   swap.hasDynamicSwapFee = hasDynamicSwapFee;
+  // Vault Swap has no swapper field. transaction.from is the account or router
+  // that submitted the swap (historical behaviour).
   swap.user = event.transaction.from;
   swap.logIndex = event.logIndex;
   swap.blockNumber = event.block.number;
@@ -367,7 +398,7 @@ export function handleSwap(event: SwapEvent): void {
   swap.transactionHash = event.transaction.hash;
 
   const storeEventsFrom = dataSource.context().get("storeEventsFrom");
-  if (storeEventsFrom && event.block.number > storeEventsFrom.toBigInt()) {
+  if (storeEventsFrom && event.block.number >= storeEventsFrom.toBigInt()) {
     swap.save();
   }
 
@@ -384,11 +415,6 @@ export function handleSwap(event: SwapEvent): void {
     return;
   }
 
-  let aggregateSwapFeeAmount = scaleDown(
-    mulDownSwapFee(event.params.swapFeeAmount, pool.protocolSwapFee),
-    poolTokenIn.decimals
-  );
-
   let vault = VaultExtension.bind(event.address);
   let poolTokensInfo = vault.getPoolTokenInfo(poolAddress);
 
@@ -398,20 +424,21 @@ export function handleSwap(event: SwapEvent): void {
   );
   poolTokenIn.volume = poolTokenIn.volume.plus(tokenAmountIn);
   poolTokenIn.totalSwapFee = poolTokenIn.totalSwapFee.plus(swapFeeAmount);
-  poolTokenIn.vaultProtocolSwapFeeBalance =
-    poolTokenIn.vaultProtocolSwapFeeBalance.plus(aggregateSwapFeeAmount);
-  poolTokenIn.totalProtocolSwapFee = poolTokenIn.totalProtocolSwapFee.plus(
-    aggregateSwapFeeAmount
-  );
+  accrueVaultSwapFee(poolTokenIn, pool, event.params.swapFeeAmount);
 
-  poolTokenIn.totalStaticSwapFee =
-    poolTokenIn.totalStaticSwapFee.plus(swapFeeAmount);
   poolTokenIn.totalSwapFeeBase =
     poolTokenIn.totalSwapFeeBase.plus(swapFeeBaseAmount);
+  poolTokenIn.totalSwapFeeDelta =
+    poolTokenIn.totalSwapFeeDelta.plus(swapFeeDeltaAmount);
 
+  // Static and dynamic counters partition totalSwapFee by swap type; the
+  // base/delta split of dynamic swaps lives in totalSwapFeeBase/Delta.
   if (hasDynamicSwapFee) {
     poolTokenIn.totalDynamicSwapFee =
       poolTokenIn.totalDynamicSwapFee.plus(swapFeeAmount);
+  } else {
+    poolTokenIn.totalStaticSwapFee =
+      poolTokenIn.totalStaticSwapFee.plus(swapFeeAmount);
   }
 
   poolTokenIn.save();
@@ -423,6 +450,7 @@ export function handleSwap(event: SwapEvent): void {
   poolTokenOut.volume = poolTokenOut.volume.plus(tokenAmountOut);
   poolTokenOut.save();
 
+  updatePoolTokenRates(pool);
   updateProtocolYieldFeeAmounts(pool);
 }
 
@@ -432,46 +460,45 @@ export function handleSwap(event: SwapEvent): void {
 
 export function getBuffer(wrappedTokenAddress: Address): Buffer {
   let buffer = Buffer.load(wrappedTokenAddress);
-
   if (buffer) return buffer;
 
-  let erc4626Contract = ERC4626.bind(wrappedTokenAddress);
-  let asset = erc4626Contract.try_asset();
-  let underlyingTokenAddress = asset.reverted ? ZERO_ADDRESS : asset.value;
-
-  let wrappedToken = getToken(wrappedTokenAddress);
-  let underlyingToken = getToken(underlyingTokenAddress);
+  // initializeBuffer requires asset(), so the probe only fails on a bad eth_call.
+  // Keep a Buffer either way so buffer events still index.
+  let underlying = probeErc4626(wrappedTokenAddress);
+  let underlyingAddress = underlying ? underlying : ZERO_ADDRESS;
 
   buffer = new Buffer(wrappedTokenAddress);
-  buffer.wrappedToken = wrappedToken.id;
-  buffer.underlyingToken = underlyingToken.id;
+  buffer.wrappedToken = getToken(wrappedTokenAddress).id;
+  buffer.underlyingToken = getToken(underlyingAddress).id;
   buffer.wrappedBalance = ZERO_BD;
   buffer.underlyingBalance = ZERO_BD;
   buffer.totalShares = ZERO_BD;
+  // Persist so derived PoolToken.buffer links can reference it.
+  buffer.save();
+  linkBufferToPoolTokens(buffer);
 
   return buffer;
+}
+
+function applyBufferBalancesFromEvent(
+  buffer: Buffer,
+  bufferBalances: Bytes
+): void {
+  let wrappedToken = getToken(changetype<Address>(buffer.wrappedToken));
+  let underlyingToken = getToken(changetype<Address>(buffer.underlyingToken));
+  let decoded = decodeBufferBalances(bufferBalances);
+  buffer.wrappedBalance = scaleDown(decoded.wrappedRaw, wrappedToken.decimals);
+  buffer.underlyingBalance = scaleDown(
+    decoded.underlyingRaw,
+    underlyingToken.decimals
+  );
 }
 
 export function handleLiquidityAddedToBuffer(
   event: LiquidityAddedToBuffer
 ): void {
   let buffer = getBuffer(event.params.wrappedToken);
-
-  let wrappedToken = getToken(changetype<Address>(buffer.wrappedToken));
-  let underlyingToken = getToken(changetype<Address>(buffer.underlyingToken));
-
-  let amountWrapped = scaleDown(
-    event.params.amountWrapped,
-    wrappedToken.decimals
-  );
-  let amountUnderlying = scaleDown(
-    event.params.amountUnderlying,
-    underlyingToken.decimals
-  );
-
-  buffer.wrappedBalance = buffer.wrappedBalance.plus(amountWrapped);
-  buffer.underlyingBalance = buffer.underlyingBalance.plus(amountUnderlying);
-
+  applyBufferBalancesFromEvent(buffer, event.params.bufferBalances);
   buffer.save();
 }
 
@@ -479,22 +506,7 @@ export function handleLiquidityRemovedFromBuffer(
   event: LiquidityRemovedFromBuffer
 ): void {
   let buffer = getBuffer(event.params.wrappedToken);
-
-  let wrappedToken = getToken(changetype<Address>(buffer.wrappedToken));
-  let underlyingToken = getToken(changetype<Address>(buffer.underlyingToken));
-
-  let amountWrapped = scaleDown(
-    event.params.amountWrapped,
-    wrappedToken.decimals
-  );
-  let amountUnderlying = scaleDown(
-    event.params.amountUnderlying,
-    underlyingToken.decimals
-  );
-
-  buffer.wrappedBalance = buffer.wrappedBalance.minus(amountWrapped);
-  buffer.underlyingBalance = buffer.underlyingBalance.minus(amountUnderlying);
-
+  applyBufferBalancesFromEvent(buffer, event.params.bufferBalances);
   buffer.save();
 }
 
@@ -532,7 +544,7 @@ export function handleBufferSharesBurned(event: BufferSharesBurned): void {
   buffer.totalShares = buffer.totalShares.minus(burnedShares);
   buffer.save();
 
-  let bufferShareId = event.params.wrappedToken.concat(event.params.from);
+  let bufferShareId = buffer.id.concat(event.params.from);
   let bufferShare = BufferShare.load(bufferShareId);
 
   if (!bufferShare) {
@@ -550,58 +562,68 @@ export function handleBufferSharesBurned(event: BufferSharesBurned): void {
 // [    16 bytes       |       16 bytes      ]
 // [  wrappedBalance   |  underlyingBalance  ]
 // [MSB                                   LSB]
-export function handleUnwrap(event: Unwrap): void {
-  let buffer = getBuffer(event.params.wrappedToken);
+function recordWrapUnwrap(
+  event: ethereum.Event,
+  buffer: Buffer,
+  type: string,
+  wrappedAmountRaw: BigInt,
+  underlyingAmountRaw: BigInt
+): void {
+  const storeEventsFrom = dataSource.context().get("storeEventsFrom");
+  if (!storeEventsFrom || event.block.number < storeEventsFrom.toBigInt()) {
+    return;
+  }
 
   let wrappedToken = getToken(changetype<Address>(buffer.wrappedToken));
   let underlyingToken = getToken(changetype<Address>(buffer.underlyingToken));
-
-  // Convert to hex and remove the 0x prefix
-  const bufferBalances = event.params.bufferBalances.toHex().slice(2);
-
-  // Each byte represents 2 hex digits
-  // Thus each balance is represented by 32 chars
-  let wrappedBalance = bufferBalances.slice(0, 32);
-  let underlyingBalance = bufferBalances.slice(32, 64);
-
-  buffer.underlyingBalance = scaleDown(
-    hexToBigInt(underlyingBalance),
-    wrappedToken.decimals
+  let entry = new BufferWrapUnwrap(
+    event.transaction.hash.concatI32(event.logIndex.toI32())
   );
-  buffer.wrappedBalance = scaleDown(
-    hexToBigInt(wrappedBalance),
+  entry.buffer = buffer.id;
+  entry.type = type;
+  entry.wrappedToken = buffer.wrappedToken;
+  entry.underlyingToken = buffer.underlyingToken;
+  entry.amountWrapped = scaleDown(wrappedAmountRaw, wrappedToken.decimals);
+  entry.amountUnderlying = scaleDown(
+    underlyingAmountRaw,
     underlyingToken.decimals
   );
-  buffer.save();
+  entry.wrappedBalance = buffer.wrappedBalance;
+  entry.underlyingBalance = buffer.underlyingBalance;
+  entry.user = event.transaction.from;
+  entry.blockNumber = event.block.number;
+  entry.blockTimestamp = event.block.timestamp;
+  entry.transactionHash = event.transaction.hash;
+  entry.logIndex = event.logIndex;
+  entry.save();
 }
 
-// For Wrap/Unwrap events, bufferBalances is encoded into bytes as follows:
-// [    16 bytes       |       16 bytes      ]
-// [  wrappedBalance   |  underlyingBalance  ]
-// [MSB                                   LSB]
+export function handleUnwrap(event: Unwrap): void {
+  let buffer = getBuffer(event.params.wrappedToken);
+  applyBufferBalancesFromEvent(buffer, event.params.bufferBalances);
+  buffer.save();
+
+  recordWrapUnwrap(
+    event,
+    buffer,
+    "Unwrap",
+    event.params.burnedShares,
+    event.params.withdrawnUnderlying
+  );
+}
+
 export function handleWrap(event: Wrap): void {
   let buffer = getBuffer(event.params.wrappedToken);
-
-  let wrappedToken = getToken(changetype<Address>(buffer.wrappedToken));
-  let underlyingToken = getToken(changetype<Address>(buffer.underlyingToken));
-
-  // Convert to hex and remove the 0x prefix
-  const bufferBalances = event.params.bufferBalances.toHex().slice(2);
-
-  // Each byte represents 2 hex digits
-  // Thus each balance is represented by 32 chars
-  let wrappedBalance = bufferBalances.slice(0, 32);
-  let underlyingBalance = bufferBalances.slice(32, 64);
-
-  buffer.underlyingBalance = scaleDown(
-    hexToBigInt(underlyingBalance),
-    wrappedToken.decimals
-  );
-  buffer.wrappedBalance = scaleDown(
-    hexToBigInt(wrappedBalance),
-    underlyingToken.decimals
-  );
+  applyBufferBalancesFromEvent(buffer, event.params.bufferBalances);
   buffer.save();
+
+  recordWrapUnwrap(
+    event,
+    buffer,
+    "Wrap",
+    event.params.mintedShares,
+    event.params.depositedUnderlying
+  );
 }
 
 /************************************
@@ -654,4 +676,47 @@ export function handleProtocolFeeControllerChanged(
   vault.save();
 
   ProtocolFeeController.create(event.params.newProtocolFeeController);
+}
+
+export function handleAuthorizerChanged(event: AuthorizerChanged): void {
+  let vault = getVault();
+  vault.authorizer = event.params.newAuthorizer;
+  vault.save();
+}
+
+export function handleVaultPausedStateChanged(
+  event: VaultPausedStateChanged
+): void {
+  let vault = getVault();
+  vault.isPaused = event.params.paused;
+  vault.save();
+}
+
+export function handleVaultBuffersPausedStateChanged(
+  event: VaultBuffersPausedStateChanged
+): void {
+  let vault = getVault();
+  vault.isBuffersPaused = event.params.paused;
+  vault.save();
+}
+
+export function handleAggregateSwapFeePercentageChanged(
+  event: AggregateSwapFeePercentageChanged
+): void {
+  let pool = Pool.load(event.params.pool);
+  if (!pool) return;
+  pool.aggregateSwapFee = scaleDown(event.params.aggregateSwapFeePercentage, 18);
+  pool.save();
+}
+
+export function handleAggregateYieldFeePercentageChanged(
+  event: AggregateYieldFeePercentageChanged
+): void {
+  let pool = Pool.load(event.params.pool);
+  if (!pool) return;
+  pool.aggregateYieldFee = scaleDown(
+    event.params.aggregateYieldFeePercentage,
+    18
+  );
+  pool.save();
 }
