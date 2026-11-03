@@ -48,16 +48,15 @@ describe("ABI ↔ template handler coverage", () => {
     )!;
     expect(body).toMatch(/ampIsUpdating\s*=\s*true/);
     expect(body).toMatch(
-      /ampStartValue\s*=\s*event\.params\.startValue\.div\(\s*precision\s*\)/
+      /ampStartValue\s*=\s*event\.params\.startValue\.divDecimal\(\s*precision\.toBigDecimal\(\)\s*\)/
     );
     expect(body).toMatch(
-      /ampEndValue\s*=\s*event\.params\.endValue\.div\(\s*precision\s*\)/
+      /ampEndValue\s*=\s*event\.params\.endValue\.divDecimal\(\s*precision\.toBigDecimal\(\)\s*\)/
     );
     expect(body).toMatch(/ampStartTime\s*=\s*event\.params\.startTime/);
     expect(body).toMatch(/ampEndTime\s*=\s*event\.params\.endTime/);
     const amp = readRepo("subgraphs/pools/src/mappings/amp.ts");
-    expect(amp).toMatch(/function settleAmpRamp/);
-    expect(amp).toMatch(/function handleBlock/);
+    expect(amp).not.toMatch(/function handleBlock/);
     expect(amp).toMatch(/function touchPool/);
     expect(amp).toMatch(/ampIsUpdating\s*=\s*false/);
     expect(extractFunction(amp, "handleAmpUpdateStarted")!).toMatch(
@@ -66,11 +65,8 @@ describe("ABI ↔ template handler coverage", () => {
     expect(extractFunction(amp, "handleAmpUpdateStopped")!).toMatch(
       /touchPool\(\s*event\.address\s*\)/
     );
-    expect(extractFunction(amp, "handleBlock")!).toMatch(
-      /if\s*\(\s*!stableParams\.amp\.equals\(\s*prevAmp\s*\)\s*\)/
-    );
     const template = readRepo("subgraphs/pools/template.yaml");
-    expect(template).toMatch(/handler:\s*handleBlock/);
+    expect(template).not.toMatch(/blockHandlers/);
   });
 
   it("BufferShares mint and burn use the same BufferShare id scheme", () => {

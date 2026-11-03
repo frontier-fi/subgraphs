@@ -1,4 +1,4 @@
-import { Address, BigInt, dataSource, ethereum } from "@graphprotocol/graph-ts";
+import { Address, BigDecimal, BigInt } from "@graphprotocol/graph-ts";
 import {
   AmpUpdateStarted,
   AmpUpdateStopped,
@@ -12,8 +12,8 @@ function ensureStableParams(poolAddress: Address): StableParams {
     stableParams = new StableParams(poolAddress);
     stableParams.amp = BigInt.fromI32(0);
     stableParams.ampIsUpdating = false;
-    stableParams.ampStartValue = BigInt.fromI32(0);
-    stableParams.ampEndValue = BigInt.fromI32(0);
+    stableParams.ampStartValue = BigDecimal.zero();
+    stableParams.ampEndValue = BigDecimal.zero();
     stableParams.ampStartTime = BigInt.fromI32(0);
     stableParams.ampEndTime = BigInt.fromI32(0);
   }
@@ -45,58 +45,20 @@ function syncCurrentAmp(stableParams: StableParams, poolAddress: Address): void 
   }
 }
 
-/** Advance a ramp from the stored schedule. Natural completion emits no event. */
-export function settleAmpRamp(stableParams: StableParams, now: BigInt): void {
-  if (!stableParams.ampIsUpdating) return;
-
-  if (now.ge(stableParams.ampEndTime)) {
-    stableParams.amp = stableParams.ampEndValue;
-    stableParams.ampIsUpdating = false;
-    return;
-  }
-
-  if (now.le(stableParams.ampStartTime)) {
-    stableParams.amp = stableParams.ampStartValue;
-    return;
-  }
-
-  let duration = stableParams.ampEndTime.minus(stableParams.ampStartTime);
-  if (duration.le(BigInt.fromI32(0))) {
-    stableParams.amp = stableParams.ampEndValue;
-    stableParams.ampIsUpdating = false;
-    return;
-  }
-
-  let elapsed = now.minus(stableParams.ampStartTime);
-  let delta = stableParams.ampEndValue.minus(stableParams.ampStartValue);
-  stableParams.amp = stableParams.ampStartValue.plus(
-    delta.times(elapsed).div(duration)
-  );
-}
-
-export function handleBlock(block: ethereum.Block): void {
-  let poolAddress = dataSource.address();
-  let stableParams = StableParams.load(poolAddress);
-  if (!stableParams || !stableParams.ampIsUpdating) return;
-  let prevAmp = stableParams.amp;
-  settleAmpRamp(stableParams, block.timestamp);
-  stableParams.save();
-  if (!stableParams.amp.equals(prevAmp)) {
-    touchPool(poolAddress);
-  }
-}
-
 export function handleAmpUpdateStarted(event: AmpUpdateStarted): void {
   let stableParams = ensureStableParams(event.address);
   let precision = ampPrecision(event.address);
   stableParams.ampIsUpdating = true;
-  // Event values are precision-scaled; store same units as `amp`.
-  stableParams.ampStartValue = event.params.startValue.div(precision);
-  stableParams.ampEndValue = event.params.endValue.div(precision);
+  // Event values are precision-scaled; keep fractional amps (150500 -> 150.5).
+  stableParams.ampStartValue = event.params.startValue.divDecimal(
+    precision.toBigDecimal()
+  );
+  stableParams.ampEndValue = event.params.endValue.divDecimal(
+    precision.toBigDecimal()
+  );
   stableParams.ampStartTime = event.params.startTime;
   stableParams.ampEndTime = event.params.endTime;
   syncCurrentAmp(stableParams, event.address);
-  settleAmpRamp(stableParams, event.block.timestamp);
   stableParams.save();
   touchPool(event.address);
 }
@@ -104,8 +66,8 @@ export function handleAmpUpdateStarted(event: AmpUpdateStarted): void {
 export function handleAmpUpdateStopped(event: AmpUpdateStopped): void {
   let stableParams = ensureStableParams(event.address);
   stableParams.ampIsUpdating = false;
-  stableParams.ampStartValue = BigInt.fromI32(0);
-  stableParams.ampEndValue = BigInt.fromI32(0);
+  stableParams.ampStartValue = BigDecimal.zero();
+  stableParams.ampEndValue = BigDecimal.zero();
   stableParams.ampStartTime = BigInt.fromI32(0);
   stableParams.ampEndTime = BigInt.fromI32(0);
   syncCurrentAmp(stableParams, event.address);
