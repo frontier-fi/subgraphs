@@ -59,16 +59,29 @@ describe("Swap / protocol fee accounting", () => {
     expect(body).toMatch(/totalSwapFeeDelta/);
   });
 
-  it("dynamic swaps do not add the full fee to both static and dynamic counters", () => {
+  it("static and dynamic swap fee counters partition totalSwapFee", () => {
     const body = extractFunction(
       readRepo("subgraphs/vault/src/mappings/vault.ts"),
       "handleSwap"
     )!;
-    const staticAlwaysFull =
-      /totalStaticSwapFee\s*=\s*poolTokenIn\.totalStaticSwapFee\.plus\(\s*swapFeeAmount\s*\)/.test(
-        body
+    expect(body).toMatch(
+      /if\s*\(\s*hasDynamicSwapFee\s*\)\s*\{\s*poolTokenIn\.totalDynamicSwapFee\s*=\s*poolTokenIn\.totalDynamicSwapFee\.plus\(\s*swapFeeAmount\s*\);?\s*\}\s*else\s*\{\s*poolTokenIn\.totalStaticSwapFee\s*=\s*poolTokenIn\.totalStaticSwapFee\.plus\(\s*swapFeeAmount\s*\)/
+    );
+    expect(body).not.toMatch(/totalStaticSwapFee\.plus\(\s*swapFeeBaseAmount/);
+  });
+
+  it("controller fee-percentage events do not overwrite the Vault aggregate", () => {
+    const src = readRepo("subgraphs/vault/src/mappings/controller.ts");
+    for (const name of [
+      "handlePoolCreatorSwapFeePercentageChanged",
+      "handlePoolCreatorYieldFeePercentageChanged",
+      "handleProtocolSwapFeePercentageChanged",
+      "handleProtocolYieldFeePercentageChanged",
+    ]) {
+      expect(extractFunction(src, name)!).not.toMatch(
+        /aggregate(Swap|Yield)Fee\s*=/
       );
-    expect(staticAlwaysFull).toBe(false);
+    }
   });
 
   it("ProtocolSwapFeeCollected splits the full aggregate and clears vault pending", () => {

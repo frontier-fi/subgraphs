@@ -172,9 +172,9 @@ type PoolToken @entity(immutable: false) {
   totalSwapFeeBase: BigDecimal!
   "Total difference in swap fees collected due to dynamic fees"
   totalSwapFeeDelta: BigDecimal!
-  "Total static swap fees collected for this token"
+  "Total swap fees from swaps at the pool's static fee percentage"
   totalStaticSwapFee: BigDecimal!
-  "Total dynamic swap fees collected for this token"
+  "Total swap fees from swaps at a dynamic (hook) fee percentage; static + dynamic = totalSwapFee"
   totalDynamicSwapFee: BigDecimal!
   "Buffer associated with this token, if any"
   buffer: Buffer

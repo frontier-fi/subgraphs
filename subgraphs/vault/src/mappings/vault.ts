@@ -425,16 +425,14 @@ export function handleSwap(event: SwapEvent): void {
   poolTokenIn.totalSwapFeeDelta =
     poolTokenIn.totalSwapFeeDelta.plus(swapFeeDeltaAmount);
 
-  // Static counter gets the base (static) fee component; dynamic gets the
-  // full fee only when the swap used a dynamic percentage.
-  let staticSwapFeeCredit = hasDynamicSwapFee
-    ? swapFeeBaseAmount
-    : swapFeeAmount;
-  poolTokenIn.totalStaticSwapFee =
-    poolTokenIn.totalStaticSwapFee.plus(staticSwapFeeCredit);
+  // Static and dynamic counters partition totalSwapFee by swap type; the
+  // base/delta split of dynamic swaps lives in totalSwapFeeBase/Delta.
   if (hasDynamicSwapFee) {
     poolTokenIn.totalDynamicSwapFee =
       poolTokenIn.totalDynamicSwapFee.plus(swapFeeAmount);
+  } else {
+    poolTokenIn.totalStaticSwapFee =
+      poolTokenIn.totalStaticSwapFee.plus(swapFeeAmount);
   }
 
   poolTokenIn.save();

@@ -217,16 +217,6 @@ export function createPoolShare(
   return poolShare;
 }
 
-export function aggregateFeePercentage(
-  protocolPct: BigDecimal,
-  creatorPct: BigDecimal
-): BigDecimal {
-  return scaleDown(
-    computeAggregateFeePercentageRaw(scaleUp(protocolPct, 18), scaleUp(creatorPct, 18)),
-    18
-  );
-}
-
 /**
  * Split a collected aggregate amount into protocol and creator shares.
  * Protocol is paid first; creator receives creatorPct of the remainder,
