@@ -116,6 +116,16 @@ describe("Swap / protocol fee accounting", () => {
     );
   });
 
+  it("swap fee accrual skips recovery mode and uses the Vault aggregate", () => {
+    const body = extractFunction(
+      readRepo("subgraphs/vault/src/helpers/entities.ts"),
+      "accrueVaultSwapFee"
+    )!;
+    expect(body).toMatch(/if\s*\(\s*pool\.isInRecoveryMode\s*\)\s*return/);
+    expect(body).toMatch(/pool\.aggregateSwapFee/);
+    expect(body).not.toMatch(/aggregateFeePercentage\(/);
+  });
+
   it("withdrawals do not drive controller balances negative", () => {
     const src = readRepo("subgraphs/vault/src/mappings/controller.ts");
     expect(src).toMatch(/function floorAtZero/);

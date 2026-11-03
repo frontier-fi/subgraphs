@@ -281,12 +281,11 @@ export function accrueVaultSwapFee(
   pool: Pool,
   swapFeeAmountRaw: BigInt
 ): void {
-  let aggregateFee = aggregateFeePercentage(
-    pool.protocolSwapFee,
-    pool.poolCreatorSwapFee
-  );
+  // The Vault skips aggregate swap fees while the pool is in Recovery Mode.
+  if (pool.isInRecoveryMode) return;
+
   let aggregateAmount = scaleDown(
-    mulDown(swapFeeAmountRaw, scaleUp(aggregateFee, 18)),
+    mulDown(swapFeeAmountRaw, scaleUp(pool.aggregateSwapFee, 18)),
     poolToken.decimals
   );
   let parts = splitAggregateAmount(
