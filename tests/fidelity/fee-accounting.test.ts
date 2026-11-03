@@ -149,4 +149,18 @@ describe("Swap / protocol fee accounting", () => {
       /floorAtZero/
     );
   });
+
+  it("yield accrual splits only the new delta and keeps earlier pending shares", () => {
+    const body = extractFunction(
+      readRepo("subgraphs/vault/src/helpers/entities.ts"),
+      "updateProtocolYieldFeeAmounts"
+    )!;
+    expect(body).not.toMatch(/splitAggregateAmount\(\s*aggregateAmount/);
+    expect(body).toMatch(
+      /vaultProtocolYieldFeeBalance\s*=\s*previousProtocol\.plus\(\s*parts\[0\]\s*\)/
+    );
+    expect(body).toMatch(
+      /vaultCreatorYieldFeeBalance\s*=\s*previousCreator\.plus\(\s*parts\[1\]\s*\)/
+    );
+  });
 });

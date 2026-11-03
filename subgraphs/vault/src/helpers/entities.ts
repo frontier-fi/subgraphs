@@ -313,29 +313,37 @@ export function updateProtocolYieldFeeAmounts(pool: Pool): void {
       aggregateYieldFee.value,
       poolToken.decimals
     );
-    let previousAggregate = poolToken.vaultProtocolYieldFeeBalance.plus(
-      poolToken.vaultCreatorYieldFeeBalance
-    );
+    let previousProtocol = poolToken.vaultProtocolYieldFeeBalance;
+    let previousCreator = poolToken.vaultCreatorYieldFeeBalance;
+    let previousAggregate = previousProtocol.plus(previousCreator);
     let delta = aggregateAmount.minus(previousAggregate);
-    let parts = splitAggregateAmount(
-      delta.gt(ZERO_BD) ? delta : ZERO_BD,
-      pool.protocolYieldFee,
-      pool.poolCreatorYieldFee
-    );
-
-    let split = splitAggregateAmount(
-      aggregateAmount,
-      pool.protocolYieldFee,
-      pool.poolCreatorYieldFee
-    );
-    poolToken.vaultProtocolYieldFeeBalance = split[0];
-    poolToken.vaultCreatorYieldFeeBalance = split[1];
 
     if (delta.gt(ZERO_BD)) {
+      // Split only the new accrual at current percentages; earlier pending
+      // keeps the split it was accrued (and added to the totals) with.
+      let parts = splitAggregateAmount(
+        delta,
+        pool.protocolYieldFee,
+        pool.poolCreatorYieldFee
+      );
+      poolToken.vaultProtocolYieldFeeBalance = previousProtocol.plus(parts[0]);
+      poolToken.vaultCreatorYieldFeeBalance = previousCreator.plus(parts[1]);
       poolToken.totalProtocolYieldFee =
         poolToken.totalProtocolYieldFee.plus(parts[0]);
       poolToken.totalCreatorYieldFee =
         poolToken.totalCreatorYieldFee.plus(parts[1]);
+    } else if (delta.lt(ZERO_BD)) {
+      // Pending shrank without a collect event seen yet: scale both shares down.
+      if (aggregateAmount.le(ZERO_BD) || previousAggregate.le(ZERO_BD)) {
+        poolToken.vaultProtocolYieldFeeBalance = ZERO_BD;
+        poolToken.vaultCreatorYieldFeeBalance = ZERO_BD;
+      } else {
+        let protocolPart = previousProtocol
+          .times(aggregateAmount)
+          .div(previousAggregate);
+        poolToken.vaultProtocolYieldFeeBalance = protocolPart;
+        poolToken.vaultCreatorYieldFeeBalance = aggregateAmount.minus(protocolPart);
+      }
     }
 
     poolToken.save();
