@@ -19,19 +19,18 @@ export function handleTransfer(event: TransferEvent): void {
   let amount = tokenToDecimal(event.params.value, BPT_DECIMALS);
 
   if (isMint) {
-    // Do not create a PoolShare for the zero address.
-    let poolShareTo = getPoolShare(poolAddress, event.params.to);
-    let balanceBefore = poolShareTo.balance;
-    poolShareTo.balance = poolShareTo.balance.plus(amount);
-    poolShareTo.save();
     pool.totalShares = pool.totalShares.plus(amount);
 
-    if (
-      event.params.to != ZERO_ADDRESS &&
-      balanceBefore.equals(ZERO_BD) &&
-      poolShareTo.balance.gt(ZERO_BD)
-    ) {
-      pool.holdersCount = pool.holdersCount.plus(BigInt.fromI32(1));
+    // The minimum supply reserve is minted to 0x0; do not create a PoolShare for it.
+    if (event.params.to != ZERO_ADDRESS) {
+      let poolShareTo = getPoolShare(poolAddress, event.params.to);
+      let balanceBefore = poolShareTo.balance;
+      poolShareTo.balance = poolShareTo.balance.plus(amount);
+      poolShareTo.save();
+
+      if (balanceBefore.equals(ZERO_BD) && poolShareTo.balance.gt(ZERO_BD)) {
+        pool.holdersCount = pool.holdersCount.plus(BigInt.fromI32(1));
+      }
     }
   } else if (isBurn) {
     let poolShareFrom = getPoolShare(poolAddress, event.params.from);
