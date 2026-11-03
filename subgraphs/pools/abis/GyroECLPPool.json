@@ -276,7 +276,7 @@
     ],
     "name": "computeBalance",
     "outputs": [
-      { "internalType": "uint256", "name": "newBalance", "type": "uint256" }
+      { "internalType": "uint256", "name": "", "type": "uint256" }
     ],
     "stateMutability": "view",
     "type": "function"
