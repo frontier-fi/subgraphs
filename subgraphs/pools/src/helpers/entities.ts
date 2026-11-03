@@ -14,6 +14,10 @@ export function getFactory(
     factory.type = type;
     factory.version = version;
     factory.save();
+  } else if (factory.version == 0 && version != 0) {
+    // The first pool's version() may revert or be unparseable; fill it in later.
+    factory.version = version;
+    factory.save();
   }
 
   return factory;
