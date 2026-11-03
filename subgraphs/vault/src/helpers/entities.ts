@@ -196,41 +196,26 @@ export function createToken(tokenAddress: Address): void {
 }
 
 /**
- * Create a Buffer when wrappedTokenAddress is an ERC-4626 vault.
- * Rate-provider tokens (tokenType 1) whose asset() reverts stay null.
+ * Flag tokenAddress as ERC-4626 and link its underlying Token when asset()
+ * succeeds. Returns the underlying address, or null when asset() reverts.
+ * Does not create a Buffer: Vault buffers only exist after initializeBuffer.
  */
-export function tryInitErc4626Buffer(
-  wrappedTokenAddress: Address
-): Buffer | null {
-  let existing = Buffer.load(wrappedTokenAddress);
-  if (existing) {
-    let wrappedToken = getToken(wrappedTokenAddress);
-    wrappedToken.isErc4626 = true;
-    wrappedToken.underlyingToken = existing.underlyingToken;
-    wrappedToken.save();
-    return existing;
+export function probeErc4626(tokenAddress: Address): Address | null {
+  let token = getToken(tokenAddress);
+  if (token.isErc4626) {
+    return changetype<Address>(token.underlyingToken!);
   }
 
-  let assetCall = ERC4626.bind(wrappedTokenAddress).try_asset();
+  let assetCall = ERC4626.bind(tokenAddress).try_asset();
   if (assetCall.reverted || assetCall.value.equals(ZERO_ADDRESS)) {
     return null;
   }
 
   let underlyingToken = getToken(assetCall.value);
-  let wrappedToken = getToken(wrappedTokenAddress);
-  wrappedToken.isErc4626 = true;
-  wrappedToken.underlyingToken = underlyingToken.id;
-  wrappedToken.save();
-
-  let buffer = new Buffer(wrappedTokenAddress);
-  buffer.wrappedToken = wrappedToken.id;
-  buffer.underlyingToken = underlyingToken.id;
-  buffer.wrappedBalance = ZERO_BD;
-  buffer.underlyingBalance = ZERO_BD;
-  buffer.totalShares = ZERO_BD;
-  buffer.save();
-  linkBufferToPoolTokens(buffer);
-  return buffer;
+  token.isErc4626 = true;
+  token.underlyingToken = underlyingToken.id;
+  token.save();
+  return assetCall.value;
 }
 
 export function getToken(tokenAddress: Address): Token {
@@ -335,7 +320,10 @@ export function accrueVaultSwapFee(
 }
 
 export function updateProtocolYieldFeeAmounts(pool: Pool): void {
-  if (pool.protocolFeeExempt) return;
+  // Same gate as the Vault (PoolDataLib): no yield fees accrue at a zero
+  // aggregate yield fee or in Recovery Mode. protocolFeeExempt is not enough:
+  // exempt pools can still have creator or governance-set yield fees.
+  if (pool.aggregateYieldFee.equals(ZERO_BD) || pool.isInRecoveryMode) return;
 
   let poolTokens = pool.tokens.load();
   let anyPaysYield = false;

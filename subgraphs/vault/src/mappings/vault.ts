@@ -4,6 +4,7 @@ import {
   BigInt,
   Bytes,
   dataSource,
+  ethereum,
   log,
 } from "@graphprotocol/graph-ts";
 import {
@@ -46,7 +47,7 @@ import {
   linkNestedPoolToPoolTokens,
   getToken,
   getVault,
-  tryInitErc4626Buffer,
+  probeErc4626,
   loadPoolToken,
   updatePoolTokenRates,
   updateProtocolYieldFeeAmounts,
@@ -114,8 +115,9 @@ export function handlePoolRegistered(event: PoolRegistered): void {
 
   for (let i: i32 = 0; i < event.params.tokenConfig.length; i++) {
     let tokenConfig = event.params.tokenConfig[i];
-    if (tokenConfig.tokenType != 0 && Buffer.load(tokenConfig.token) == null) {
-      tryInitErc4626Buffer(tokenConfig.token);
+    // Flag ERC-4626 tokens; the Buffer itself is created on buffer events.
+    if (tokenConfig.tokenType != 0) {
+      probeErc4626(tokenConfig.token);
     }
     createPoolToken(poolAddress, tokenConfig, i);
     createRateProvider(poolAddress, tokenConfig);
@@ -457,30 +459,23 @@ export function handleSwap(event: SwapEvent): void {
  ************************************/
 
 export function getBuffer(wrappedTokenAddress: Address): Buffer {
-  let initialized = tryInitErc4626Buffer(wrappedTokenAddress);
-  if (initialized) {
-    let wrappedToken = getToken(wrappedTokenAddress);
-    wrappedToken.isErc4626 = true;
-    wrappedToken.underlyingToken = initialized.underlyingToken;
-    wrappedToken.save();
-    return initialized;
-  }
+  let buffer = Buffer.load(wrappedTokenAddress);
+  if (buffer) return buffer;
 
-  // asset() reverted. Keep a Buffer so wrap/share events still index.
-  let wrappedToken = getToken(wrappedTokenAddress);
-  let underlyingToken = getToken(ZERO_ADDRESS);
-  let buffer = new Buffer(wrappedTokenAddress);
-  buffer.wrappedToken = wrappedToken.id;
-  buffer.underlyingToken = underlyingToken.id;
+  // initializeBuffer requires asset(), so the probe only fails on a bad eth_call.
+  // Keep a Buffer either way so buffer events still index.
+  let underlying = probeErc4626(wrappedTokenAddress);
+  let underlyingAddress = underlying ? underlying : ZERO_ADDRESS;
+
+  buffer = new Buffer(wrappedTokenAddress);
+  buffer.wrappedToken = getToken(wrappedTokenAddress).id;
+  buffer.underlyingToken = getToken(underlyingAddress).id;
   buffer.wrappedBalance = ZERO_BD;
   buffer.underlyingBalance = ZERO_BD;
   buffer.totalShares = ZERO_BD;
+  // Persist so derived PoolToken.buffer links can reference it.
   buffer.save();
   linkBufferToPoolTokens(buffer);
-
-  wrappedToken.isErc4626 = false;
-  wrappedToken.underlyingToken = null;
-  wrappedToken.save();
 
   return buffer;
 }
@@ -567,10 +562,17 @@ export function handleBufferSharesBurned(event: BufferSharesBurned): void {
 // [    16 bytes       |       16 bytes      ]
 // [  wrappedBalance   |  underlyingBalance  ]
 // [MSB                                   LSB]
-export function handleUnwrap(event: Unwrap): void {
-  let buffer = getBuffer(event.params.wrappedToken);
-  applyBufferBalancesFromEvent(buffer, event.params.bufferBalances);
-  buffer.save();
+function recordWrapUnwrap(
+  event: ethereum.Event,
+  buffer: Buffer,
+  type: string,
+  wrappedAmountRaw: BigInt,
+  underlyingAmountRaw: BigInt
+): void {
+  const storeEventsFrom = dataSource.context().get("storeEventsFrom");
+  if (!storeEventsFrom || event.block.number < storeEventsFrom.toBigInt()) {
+    return;
+  }
 
   let wrappedToken = getToken(changetype<Address>(buffer.wrappedToken));
   let underlyingToken = getToken(changetype<Address>(buffer.underlyingToken));
@@ -578,15 +580,12 @@ export function handleUnwrap(event: Unwrap): void {
     event.transaction.hash.concatI32(event.logIndex.toI32())
   );
   entry.buffer = buffer.id;
-  entry.type = "Unwrap";
+  entry.type = type;
   entry.wrappedToken = buffer.wrappedToken;
   entry.underlyingToken = buffer.underlyingToken;
-  entry.amountWrapped = scaleDown(
-    event.params.burnedShares,
-    wrappedToken.decimals
-  );
+  entry.amountWrapped = scaleDown(wrappedAmountRaw, wrappedToken.decimals);
   entry.amountUnderlying = scaleDown(
-    event.params.withdrawnUnderlying,
+    underlyingAmountRaw,
     underlyingToken.decimals
   );
   entry.wrappedBalance = buffer.wrappedBalance;
@@ -596,11 +595,21 @@ export function handleUnwrap(event: Unwrap): void {
   entry.blockTimestamp = event.block.timestamp;
   entry.transactionHash = event.transaction.hash;
   entry.logIndex = event.logIndex;
+  entry.save();
+}
 
-  const storeEventsFrom = dataSource.context().get("storeEventsFrom");
-  if (storeEventsFrom && event.block.number >= storeEventsFrom.toBigInt()) {
-    entry.save();
-  }
+export function handleUnwrap(event: Unwrap): void {
+  let buffer = getBuffer(event.params.wrappedToken);
+  applyBufferBalancesFromEvent(buffer, event.params.bufferBalances);
+  buffer.save();
+
+  recordWrapUnwrap(
+    event,
+    buffer,
+    "Unwrap",
+    event.params.burnedShares,
+    event.params.withdrawnUnderlying
+  );
 }
 
 export function handleWrap(event: Wrap): void {
@@ -608,35 +617,13 @@ export function handleWrap(event: Wrap): void {
   applyBufferBalancesFromEvent(buffer, event.params.bufferBalances);
   buffer.save();
 
-  let wrappedToken = getToken(changetype<Address>(buffer.wrappedToken));
-  let underlyingToken = getToken(changetype<Address>(buffer.underlyingToken));
-  let entry = new BufferWrapUnwrap(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
-  entry.buffer = buffer.id;
-  entry.type = "Wrap";
-  entry.wrappedToken = buffer.wrappedToken;
-  entry.underlyingToken = buffer.underlyingToken;
-  entry.amountWrapped = scaleDown(
+  recordWrapUnwrap(
+    event,
+    buffer,
+    "Wrap",
     event.params.mintedShares,
-    wrappedToken.decimals
+    event.params.depositedUnderlying
   );
-  entry.amountUnderlying = scaleDown(
-    event.params.depositedUnderlying,
-    underlyingToken.decimals
-  );
-  entry.wrappedBalance = buffer.wrappedBalance;
-  entry.underlyingBalance = buffer.underlyingBalance;
-  entry.user = event.transaction.from;
-  entry.blockNumber = event.block.number;
-  entry.blockTimestamp = event.block.timestamp;
-  entry.transactionHash = event.transaction.hash;
-  entry.logIndex = event.logIndex;
-
-  const storeEventsFrom = dataSource.context().get("storeEventsFrom");
-  if (storeEventsFrom && event.block.number >= storeEventsFrom.toBigInt()) {
-    entry.save();
-  }
 }
 
 /************************************
