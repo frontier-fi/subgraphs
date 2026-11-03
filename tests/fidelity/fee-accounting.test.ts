@@ -103,6 +103,23 @@ describe("Swap / protocol fee accounting", () => {
     expect(apply).toMatch(/floorAtZero|ZERO_BD/);
   });
 
+  it("any collect event clears both swap and yield pending for the token", () => {
+    const apply = extractFunction(
+      readRepo("subgraphs/vault/src/mappings/controller.ts"),
+      "applyCollected"
+    )!;
+    // Vault collectAggregateFees zeroes both sides when either is non-zero.
+    expect(apply).not.toMatch(/if\s*\(\s*isSwap\s*\)\s*\{\s*poolToken\.vault/);
+    for (const field of [
+      "vaultProtocolSwapFeeBalance",
+      "vaultCreatorSwapFeeBalance",
+      "vaultProtocolYieldFeeBalance",
+      "vaultCreatorYieldFeeBalance",
+    ]) {
+      expect(apply).toMatch(new RegExp(`^\\s*poolToken\\.${field}\\s*=\\s*ZERO_BD`, "m"));
+    }
+  });
+
   it("PoolCreatorFeesWithdrawn decrements controllerCreatorFeeBalance", () => {
     const body = extractFunction(
       readRepo("subgraphs/vault/src/mappings/controller.ts"),

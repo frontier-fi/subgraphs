@@ -94,13 +94,13 @@ function applyCollected(
   // Event amount is the full aggregate taken from the Vault, not the protocol cut.
   let parts = splitAggregateAmount(amount, protocolPct, creatorPct);
 
-  if (isSwap) {
-    poolToken.vaultProtocolSwapFeeBalance = ZERO_BD;
-    poolToken.vaultCreatorSwapFeeBalance = ZERO_BD;
-  } else {
-    poolToken.vaultProtocolYieldFeeBalance = ZERO_BD;
-    poolToken.vaultCreatorYieldFeeBalance = ZERO_BD;
-  }
+  // Vault collectAggregateFees zeroes both swap and yield pending for a token
+  // when either is non-zero, but the controller only emits an event for the
+  // non-zero side. Clear both here.
+  poolToken.vaultProtocolSwapFeeBalance = ZERO_BD;
+  poolToken.vaultCreatorSwapFeeBalance = ZERO_BD;
+  poolToken.vaultProtocolYieldFeeBalance = ZERO_BD;
+  poolToken.vaultCreatorYieldFeeBalance = ZERO_BD;
 
   poolToken.controllerProtocolFeeBalance =
     poolToken.controllerProtocolFeeBalance.plus(parts[0]);
