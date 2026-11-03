@@ -49,3 +49,6 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Mapping tests (matchstick)
+        run: pnpm test:mappings

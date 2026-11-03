@@ -5,3 +5,5 @@ subgraphs/**/src/types
 subgraphs/vault/src/helpers/constants.ts
 .DS_Store
 .vscode
+subgraphs/*/tests/.bin
+subgraphs/*/tests/.latest.json

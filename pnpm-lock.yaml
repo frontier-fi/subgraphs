@@ -20,6 +20,13 @@ importers:
       '@graphprotocol/graph-ts':
         specifier: 0.38.2
         version: 0.38.2
+    devDependencies:
+      assemblyscript:
+        specifier: 0.19.23
+        version: 0.19.23
+      matchstick-as:
+        specifier: 0.6.0
+        version: 0.6.0
 
   subgraphs/vault:
     dependencies:
@@ -29,6 +36,13 @@ importers:
       '@graphprotocol/graph-ts':
         specifier: 0.38.2
         version: 0.38.2
+    devDependencies:
+      assemblyscript:
+        specifier: 0.19.23
+        version: 0.19.23
+      matchstick-as:
+        specifier: 0.6.0
+        version: 0.6.0
 
 packages:
 
@@ -1289,6 +1303,7 @@ packages:
   http-call@5.3.0:
     resolution: {integrity: sha512-ahwimsC23ICE4kPl9xTBjKB4inbRaeLyZeRunC/1Jy/Z6X8tv22MEAjK+KBOMSVLaqXPTTmd8638waVIKLGx2w==}
     engines: {node: '>=8.0.0'}
+    deprecated: Renamed to @heroku/http-call — please install @heroku/http-call instead.
 
   human-signals@2.1.0:
     resolution: {integrity: sha512-B4FFZ6q/T2jhhksgkbEW3HBvWIfDW85snkQgawt07S7J5QXTk6BkNV+0yAeZrM5QpMAdYlocGoljn0sJ/WQkFw==}
@@ -1589,6 +1604,9 @@ packages:
   make-dir@1.3.0:
     resolution: {integrity: sha512-2w31R7SJtieJJnQtGc7RVL2StM2vGYVfqUOvUDxH6bC6aJTxPxTF0GnIgCyu7tjockiUWAYQRbxa7vKn34s5sQ==}
     engines: {node: '>=4'}
+
+  matchstick-as@0.6.0:
+    resolution: {integrity: sha512-E36fWsC1AbCkBFt05VsDDRoFvGSdcZg6oZJrtIe/YDBbuFh8SKbR5FcoqDhNWqSN+F7bN/iS2u8Md0SM+4pUpw==}
 
   math-intrinsics@1.1.0:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
@@ -2174,6 +2192,10 @@ packages:
         optional: true
       jsdom:
         optional: true
+
+  wabt@1.0.24:
+    resolution: {integrity: sha512-8l7sIOd3i5GWfTWciPL0+ff/FK/deVK2Q6FN+MPz4vfUcD78i2M/49XJTwF6aml91uIiuXJEsLKWMB2cw/mtKg==}
+    hasBin: true
 
   wcwidth@1.0.1:
     resolution: {integrity: sha512-XHPEwS0q6TaxcvG85+8EYkbiCux2XtWG2mkc47Ng2A77BQu9+DqIOJldST4HgPkuea7dvKSj5VgX3P1d4rW8Tg==}
@@ -4022,6 +4044,10 @@ snapshots:
     dependencies:
       pify: 3.0.0
 
+  matchstick-as@0.6.0:
+    dependencies:
+      wabt: 1.0.24
+
   math-intrinsics@1.1.0: {}
 
   merge-options@3.0.4:
@@ -4587,6 +4613,8 @@ snapshots:
       - terser
       - tsx
       - yaml
+
+  wabt@1.0.24: {}
 
   wcwidth@1.0.1:
     dependencies:
