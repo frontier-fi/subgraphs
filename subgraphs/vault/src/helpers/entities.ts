@@ -11,6 +11,7 @@ import { PoolShare } from "../types/schema";
 import { ONE_BD, VAULT_ADDRESS, ZERO_ADDRESS, ZERO_BD, ZERO_BI } from "./constants";
 import { PoolRegisteredTokenConfigStruct } from "../types/Vault/Vault";
 import { ERC20 } from "../types/Vault/ERC20";
+import { ERC4626 } from "../types/Vault/ERC4626";
 import { VaultExtension } from "../types/Vault/VaultExtension";
 import { scaleDown, scaleUp } from "./misc";
 import { computeAggregateFeePercentageRaw, mulDown } from "./math";
@@ -189,7 +190,32 @@ export function createToken(tokenAddress: Address): void {
   token.symbol = symbolCall.reverted ? "" : symbolCall.value;
   token.decimals = decimalsCall.reverted ? 0 : decimalsCall.value;
   token.address = tokenAddress;
+  token.isErc4626 = false;
+  token.underlyingToken = null;
   token.save();
+}
+
+/**
+ * Flag tokenAddress as ERC-4626 and link its underlying Token when asset()
+ * succeeds. Returns the underlying address, or null when asset() reverts.
+ * Does not create a Buffer: Vault buffers only exist after initializeBuffer.
+ */
+export function probeErc4626(tokenAddress: Address): Address | null {
+  let token = getToken(tokenAddress);
+  if (token.isErc4626) {
+    return changetype<Address>(token.underlyingToken!);
+  }
+
+  let assetCall = ERC4626.bind(tokenAddress).try_asset();
+  if (assetCall.reverted || assetCall.value.equals(ZERO_ADDRESS)) {
+    return null;
+  }
+
+  let underlyingToken = getToken(assetCall.value);
+  token.isErc4626 = true;
+  token.underlyingToken = underlyingToken.id;
+  token.save();
+  return assetCall.value;
 }
 
 export function getToken(tokenAddress: Address): Token {
@@ -294,9 +320,23 @@ export function accrueVaultSwapFee(
 }
 
 export function updateProtocolYieldFeeAmounts(pool: Pool): void {
-  let vault = VaultExtension.bind(changetype<Address>(pool.vault));
+  // Same gate as the Vault (PoolDataLib): no yield fees accrue at a zero
+  // aggregate yield fee or in Recovery Mode. protocolFeeExempt is not enough:
+  // exempt pools can still have creator or governance-set yield fees.
+  if (pool.aggregateYieldFee.equals(ZERO_BD) || pool.isInRecoveryMode) return;
 
   let poolTokens = pool.tokens.load();
+  let anyPaysYield = false;
+  for (let i = 0; i < poolTokens.length; i++) {
+    if (poolTokens[i].paysYieldFees) {
+      anyPaysYield = true;
+      break;
+    }
+  }
+  if (!anyPaysYield) return;
+
+  let vault = VaultExtension.bind(changetype<Address>(pool.vault));
+
   for (let i = 0; i < poolTokens.length; i++) {
     let poolToken = poolTokens[i];
 

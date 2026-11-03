@@ -219,6 +219,10 @@ type Token @entity(immutable: false) {
   decimals: Int!
   "Address of the token"
   address: Bytes!
+  "Whether this token is an ERC4626 wrapped token (asset() succeeded)"
+  isErc4626: Boolean!
+  "Underlying asset Token if this token is an ERC4626 vault"
+  underlyingToken: Token
   "PoolToken rows that reference this token"
   poolTokens: [PoolToken!] @derivedFrom(field: "token")
 }
@@ -247,6 +251,33 @@ type Buffer @entity(immutable: false) {
   underlyingBalance: BigDecimal!
   "Total shares of this Buffer"
   totalShares: BigDecimal!
+}
+
+enum WrapType {
+  Wrap
+  Unwrap
+}
+
+type BufferWrapUnwrap @entity(immutable: true) {
+  id: Bytes!
+  buffer: Buffer!
+  type: WrapType!
+  wrappedToken: Bytes!
+  underlyingToken: Bytes!
+  "Wrapped shares minted (Wrap) or burned (Unwrap)"
+  amountWrapped: BigDecimal!
+  "Underlying assets deposited (Wrap) or withdrawn (Unwrap)"
+  amountUnderlying: BigDecimal!
+  "Post-operation buffer wrapped balance"
+  wrappedBalance: BigDecimal!
+  "Post-operation buffer underlying balance"
+  underlyingBalance: BigDecimal!
+  "Transaction sender (event.transaction.from)"
+  user: Bytes!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  logIndex: BigInt!
 }
 
 type BufferShare @entity(immutable: false) {

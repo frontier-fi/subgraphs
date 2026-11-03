@@ -4,6 +4,7 @@ import {
   BigInt,
   Bytes,
   dataSource,
+  ethereum,
   log,
 } from "@graphprotocol/graph-ts";
 import {
@@ -30,6 +31,7 @@ import {
 import {
   Buffer,
   BufferShare,
+  BufferWrapUnwrap,
   Pool,
   Swap,
   AddRemove,
@@ -45,6 +47,7 @@ import {
   linkNestedPoolToPoolTokens,
   getToken,
   getVault,
+  probeErc4626,
   loadPoolToken,
   updatePoolTokenRates,
   updateProtocolYieldFeeAmounts,
@@ -54,7 +57,6 @@ import { decodeBufferBalances, scaleDown, scaleUp } from "../helpers/misc";
 import { BPT, ProtocolFeeController } from "../types/templates";
 import { ERC20 } from "../types/Vault/ERC20";
 import { VaultExtension } from "../types/Vault/VaultExtension";
-import { ERC4626 } from "../types/Vault/ERC4626";
 import { mulDownSwapFee } from "../helpers/math";
 import { applyPendingPoolFeeInit } from "./controller";
 
@@ -113,6 +115,10 @@ export function handlePoolRegistered(event: PoolRegistered): void {
 
   for (let i: i32 = 0; i < event.params.tokenConfig.length; i++) {
     let tokenConfig = event.params.tokenConfig[i];
+    // Flag ERC-4626 tokens; the Buffer itself is created on buffer events.
+    if (tokenConfig.tokenType != 0) {
+      probeErc4626(tokenConfig.token);
+    }
     createPoolToken(poolAddress, tokenConfig, i);
     createRateProvider(poolAddress, tokenConfig);
   }
@@ -454,19 +460,16 @@ export function handleSwap(event: SwapEvent): void {
 
 export function getBuffer(wrappedTokenAddress: Address): Buffer {
   let buffer = Buffer.load(wrappedTokenAddress);
-
   if (buffer) return buffer;
 
-  let erc4626Contract = ERC4626.bind(wrappedTokenAddress);
-  let asset = erc4626Contract.try_asset();
-  let underlyingTokenAddress = asset.reverted ? ZERO_ADDRESS : asset.value;
-
-  let wrappedToken = getToken(wrappedTokenAddress);
-  let underlyingToken = getToken(underlyingTokenAddress);
+  // initializeBuffer requires asset(), so the probe only fails on a bad eth_call.
+  // Keep a Buffer either way so buffer events still index.
+  let underlying = probeErc4626(wrappedTokenAddress);
+  let underlyingAddress = underlying ? underlying : ZERO_ADDRESS;
 
   buffer = new Buffer(wrappedTokenAddress);
-  buffer.wrappedToken = wrappedToken.id;
-  buffer.underlyingToken = underlyingToken.id;
+  buffer.wrappedToken = getToken(wrappedTokenAddress).id;
+  buffer.underlyingToken = getToken(underlyingAddress).id;
   buffer.wrappedBalance = ZERO_BD;
   buffer.underlyingBalance = ZERO_BD;
   buffer.totalShares = ZERO_BD;
@@ -559,16 +562,68 @@ export function handleBufferSharesBurned(event: BufferSharesBurned): void {
 // [    16 bytes       |       16 bytes      ]
 // [  wrappedBalance   |  underlyingBalance  ]
 // [MSB                                   LSB]
+function recordWrapUnwrap(
+  event: ethereum.Event,
+  buffer: Buffer,
+  type: string,
+  wrappedAmountRaw: BigInt,
+  underlyingAmountRaw: BigInt
+): void {
+  const storeEventsFrom = dataSource.context().get("storeEventsFrom");
+  if (!storeEventsFrom || event.block.number < storeEventsFrom.toBigInt()) {
+    return;
+  }
+
+  let wrappedToken = getToken(changetype<Address>(buffer.wrappedToken));
+  let underlyingToken = getToken(changetype<Address>(buffer.underlyingToken));
+  let entry = new BufferWrapUnwrap(
+    event.transaction.hash.concatI32(event.logIndex.toI32())
+  );
+  entry.buffer = buffer.id;
+  entry.type = type;
+  entry.wrappedToken = buffer.wrappedToken;
+  entry.underlyingToken = buffer.underlyingToken;
+  entry.amountWrapped = scaleDown(wrappedAmountRaw, wrappedToken.decimals);
+  entry.amountUnderlying = scaleDown(
+    underlyingAmountRaw,
+    underlyingToken.decimals
+  );
+  entry.wrappedBalance = buffer.wrappedBalance;
+  entry.underlyingBalance = buffer.underlyingBalance;
+  entry.user = event.transaction.from;
+  entry.blockNumber = event.block.number;
+  entry.blockTimestamp = event.block.timestamp;
+  entry.transactionHash = event.transaction.hash;
+  entry.logIndex = event.logIndex;
+  entry.save();
+}
+
 export function handleUnwrap(event: Unwrap): void {
   let buffer = getBuffer(event.params.wrappedToken);
   applyBufferBalancesFromEvent(buffer, event.params.bufferBalances);
   buffer.save();
+
+  recordWrapUnwrap(
+    event,
+    buffer,
+    "Unwrap",
+    event.params.burnedShares,
+    event.params.withdrawnUnderlying
+  );
 }
 
 export function handleWrap(event: Wrap): void {
   let buffer = getBuffer(event.params.wrappedToken);
   applyBufferBalancesFromEvent(buffer, event.params.bufferBalances);
   buffer.save();
+
+  recordWrapUnwrap(
+    event,
+    buffer,
+    "Wrap",
+    event.params.mintedShares,
+    event.params.depositedUnderlying
+  );
 }
 
 /************************************
