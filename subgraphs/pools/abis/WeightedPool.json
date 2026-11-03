@@ -27,6 +27,11 @@
             "internalType": "string",
             "name": "version",
             "type": "string"
+          },
+          {
+            "internalType": "uint256[]",
+            "name": "minTokenBalances",
+            "type": "uint256[]"
           }
         ],
         "internalType": "struct WeightedPool.NewPoolParams",
@@ -134,6 +139,11 @@
   },
   {
     "inputs": [],
+    "name": "InvalidMinTokenBalance",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "InvalidShortString",
     "type": "error"
   },
@@ -187,6 +197,32 @@
       }
     ],
     "name": "StringTooLong",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "tokenIndex",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "actualBalance",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "minBalance",
+        "type": "uint256"
+      }
+    ],
+    "name": "TokenBalanceBelowMin",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "WeightedPoolBptRateUnsupported",
     "type": "error"
   },
   {
@@ -383,6 +419,11 @@
         "internalType": "uint256[]",
         "name": "balancesLiveScaled18",
         "type": "uint256[]"
+      },
+      {
+        "internalType": "enum Rounding",
+        "name": "rounding",
+        "type": "uint8"
       }
     ],
     "name": "computeInvariant",
@@ -500,6 +541,24 @@
   },
   {
     "inputs": [],
+    "name": "getAggregateFeePercentages",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "aggregateSwapFeePercentage",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "aggregateYieldFeePercentage",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "getCurrentLiveBalances",
     "outputs": [
       {
@@ -513,7 +572,46 @@
   },
   {
     "inputs": [],
+    "name": "getMaximumInvariantRatio",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "getMaximumSwapFeePercentage",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getMinTokenBalances",
+    "outputs": [
+      {
+        "internalType": "uint256[]",
+        "name": "minTokenBalances",
+        "type": "uint256[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getMinimumInvariantRatio",
     "outputs": [
       {
         "internalType": "uint256",
@@ -560,7 +658,7 @@
         "type": "uint256"
       }
     ],
-    "stateMutability": "view",
+    "stateMutability": "pure",
     "type": "function"
   },
   {
@@ -614,7 +712,7 @@
       },
       {
         "internalType": "uint256[]",
-        "name": "lastLiveBalances",
+        "name": "lastBalancesLiveScaled18",
         "type": "uint256[]"
       }
     ],
@@ -645,6 +743,98 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getWeightedPoolDynamicData",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256[]",
+            "name": "balancesLiveScaled18",
+            "type": "uint256[]"
+          },
+          {
+            "internalType": "uint256[]",
+            "name": "tokenRates",
+            "type": "uint256[]"
+          },
+          {
+            "internalType": "uint256",
+            "name": "staticSwapFeePercentage",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "totalSupply",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "isPoolInitialized",
+            "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "isPoolPaused",
+            "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "isPoolInRecoveryMode",
+            "type": "bool"
+          }
+        ],
+        "internalType": "struct WeightedPoolDynamicData",
+        "name": "data",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getWeightedPoolImmutableData",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "contract IERC20[]",
+            "name": "tokens",
+            "type": "address[]"
+          },
+          {
+            "internalType": "uint256[]",
+            "name": "decimalScalingFactors",
+            "type": "uint256[]"
+          },
+          {
+            "internalType": "uint256[]",
+            "name": "normalizedWeights",
+            "type": "uint256[]"
+          },
+          {
+            "internalType": "uint256[]",
+            "name": "minTokenBalances",
+            "type": "uint256[]"
+          }
+        ],
+        "internalType": "struct WeightedPoolImmutableData",
+        "name": "data",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "incrementNonce",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -719,7 +909,7 @@
             "type": "bytes"
           }
         ],
-        "internalType": "struct IBasePool.PoolSwapParams",
+        "internalType": "struct PoolSwapParams",
         "name": "request",
         "type": "tuple"
       }
@@ -728,7 +918,7 @@
     "outputs": [
       {
         "internalType": "uint256",
-        "name": "",
+        "name": "calculatedAmountScaled18",
         "type": "uint256"
       }
     ],
