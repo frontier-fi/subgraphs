@@ -1,4 +1,4 @@
-import { Address, BigInt, Bytes } from "@graphprotocol/graph-ts";
+import { Address, BigDecimal, BigInt, Bytes } from "@graphprotocol/graph-ts";
 
 import { handlePoolCreated, PoolType } from "./common";
 import { PoolCreated } from "../types/StablePoolFactory/BasePoolFactory";
@@ -12,8 +12,8 @@ function handleStablePoolParams(poolAddress: Address): Bytes {
   let ampResult = stablePool.try_getAmplificationParameter();
   let stableParams = new StableParams(poolAddress);
   stableParams.ampIsUpdating = false;
-  stableParams.ampStartValue = BigInt.fromI32(0);
-  stableParams.ampEndValue = BigInt.fromI32(0);
+  stableParams.ampStartValue = BigDecimal.zero();
+  stableParams.ampEndValue = BigDecimal.zero();
   stableParams.ampStartTime = BigInt.fromI32(0);
   stableParams.ampEndTime = BigInt.fromI32(0);
   if (!ampResult.reverted) {

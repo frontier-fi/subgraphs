@@ -16,6 +16,10 @@ describe("Holders, rate providers, and late links", () => {
       /getPoolShare\(\s*poolAddress,\s*event\.params\.to\s*\)/
     );
     expect(mintBranch![1]).not.toMatch(/event\.params\.from/);
+    // Minimum supply is minted Transfer(0x0, 0x0): the PoolShare lookup must be guarded.
+    expect(mintBranch![1]).toMatch(
+      /if\s*\(\s*event\.params\.to\s*!=\s*ZERO_ADDRESS\s*\)\s*\{[\s\S]*getPoolShare\(/
+    );
     expect(body).toMatch(/event\.params\.to\s*!=\s*ZERO_ADDRESS/);
     expect(body).toMatch(/event\.params\.from\s*!=\s*ZERO_ADDRESS/);
     expect(body).toMatch(/balance\.le\(\s*ZERO_BD\s*\)/);

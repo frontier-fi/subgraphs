@@ -1,6 +1,5 @@
 import { BigDecimal, Bytes, store } from "@graphprotocol/graph-ts";
 import {
-  aggregateFeePercentage,
   getVault,
   loadPoolToken,
   splitAggregateAmount,
@@ -45,20 +44,6 @@ function ensurePending(poolAddress: Bytes): PendingPoolFeeInit {
   pending.aggregateYieldFee = ZERO_BD;
   pending.yieldFeeExempt = false;
   return pending;
-}
-
-function refreshAggregateSwap(pool: Pool): void {
-  pool.aggregateSwapFee = aggregateFeePercentage(
-    pool.protocolSwapFee,
-    pool.poolCreatorSwapFee
-  );
-}
-
-function refreshAggregateYield(pool: Pool): void {
-  pool.aggregateYieldFee = aggregateFeePercentage(
-    pool.protocolYieldFee,
-    pool.poolCreatorYieldFee
-  );
 }
 
 /**
@@ -109,13 +94,13 @@ function applyCollected(
   // Event amount is the full aggregate taken from the Vault, not the protocol cut.
   let parts = splitAggregateAmount(amount, protocolPct, creatorPct);
 
-  if (isSwap) {
-    poolToken.vaultProtocolSwapFeeBalance = ZERO_BD;
-    poolToken.vaultCreatorSwapFeeBalance = ZERO_BD;
-  } else {
-    poolToken.vaultProtocolYieldFeeBalance = ZERO_BD;
-    poolToken.vaultCreatorYieldFeeBalance = ZERO_BD;
-  }
+  // Vault collectAggregateFees zeroes both swap and yield pending for a token
+  // when either is non-zero, but the controller only emits an event for the
+  // non-zero side. Clear both here.
+  poolToken.vaultProtocolSwapFeeBalance = ZERO_BD;
+  poolToken.vaultCreatorSwapFeeBalance = ZERO_BD;
+  poolToken.vaultProtocolYieldFeeBalance = ZERO_BD;
+  poolToken.vaultCreatorYieldFeeBalance = ZERO_BD;
 
   poolToken.controllerProtocolFeeBalance =
     poolToken.controllerProtocolFeeBalance.plus(parts[0]);
@@ -149,7 +134,8 @@ export function handlePoolCreatorSwapFeePercentageChanged(
     event.params.poolCreatorSwapFeePercentage,
     18
   );
-  refreshAggregateSwap(pool);
+  // aggregateSwapFee comes from the Vault's AggregateSwapFeePercentageChanged,
+  // which the controller triggers just before this event.
   pool.save();
 }
 
@@ -162,7 +148,7 @@ export function handlePoolCreatorYieldFeePercentageChanged(
     event.params.poolCreatorYieldFeePercentage,
     18
   );
-  refreshAggregateYield(pool);
+  // aggregateYieldFee comes from the Vault's AggregateYieldFeePercentageChanged.
   pool.save();
 }
 
@@ -172,7 +158,6 @@ export function handleProtocolSwapFeePercentageChanged(
   let pool = Pool.load(event.params.pool);
   if (!pool) return;
   pool.protocolSwapFee = scaleDown(event.params.swapFeePercentage, 18);
-  refreshAggregateSwap(pool);
   pool.save();
 }
 
@@ -182,7 +167,6 @@ export function handleProtocolYieldFeePercentageChanged(
   let pool = Pool.load(event.params.pool);
   if (!pool) return;
   pool.protocolYieldFee = scaleDown(event.params.yieldFeePercentage, 18);
-  refreshAggregateYield(pool);
   pool.save();
 }
 

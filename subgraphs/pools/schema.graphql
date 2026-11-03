@@ -4,7 +4,7 @@ enum PoolType {
   ECLP
 }
 
-type Factory @entity(immutable: true) {
+type Factory @entity(immutable: false) {
   "Unique identifier for the Factory"
   id: Bytes!
   "Address of the Factory contract"
@@ -29,12 +29,12 @@ type StableParams @entity(immutable: false) {
   id: Bytes!
   "Amplification parameter for Stable Pools"
   amp: BigInt!
-  "Whether an amplification update ramp is in progress"
+  "Set by AmpUpdateStarted, cleared by AmpUpdateStopped. A ramp that completes naturally emits no event, so compare ampEndTime to the current time"
   ampIsUpdating: Boolean!
-  "Ramp start amplification value (precision-normalized, same units as amp)"
-  ampStartValue: BigInt!
-  "Ramp end amplification value (precision-normalized, same units as amp)"
-  ampEndValue: BigInt!
+  "Ramp start amplification value (divided by AMP_PRECISION, fraction kept)"
+  ampStartValue: BigDecimal!
+  "Ramp end amplification value (divided by AMP_PRECISION, fraction kept)"
+  ampEndValue: BigDecimal!
   "Ramp start timestamp"
   ampStartTime: BigInt!
   "Ramp end timestamp"

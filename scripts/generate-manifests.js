@@ -3,7 +3,11 @@ const path = require('path');
 
 const networksData = JSON.parse(fs.readFileSync('networks.json', 'utf8'));
 
-/** Optional: GENERATE_NETWORK=sepolia — defaults to the sole network or "sepolia". */
+/**
+ * Optional: GENERATE_NETWORK=sepolia — defaults to the sole network or "sepolia".
+ * Returns null when the choice is ambiguous; build-all.sh and deploy.sh then
+ * regenerate constants per network with GENERATE_NETWORK set.
+ */
 function resolveConstantsNetwork() {
   const requested = process.env.GENERATE_NETWORK;
   const networks = Object.keys(networksData);
@@ -17,9 +21,7 @@ function resolveConstantsNetwork() {
   }
   if (networks.length === 1) return networks[0];
   if (networks.includes('sepolia')) return 'sepolia';
-  throw new Error(
-    'Multiple networks in networks.json — set GENERATE_NETWORK to pick Vault address for constants.ts'
-  );
+  return null;
 }
 
 function generateVaultConstants(network) {
@@ -104,6 +106,13 @@ function replacePlaceholders(template, network, networkData) {
   });
 });
 
-generateVaultConstants(resolveConstantsNetwork());
+const constantsNetwork = resolveConstantsNetwork();
+if (constantsNetwork) {
+  generateVaultConstants(constantsNetwork);
+} else {
+  console.warn(
+    'Multiple networks in networks.json and GENERATE_NETWORK unset — skipping vault constants.ts'
+  );
+}
 
 console.log('🎉 subgraphs successfully generated\n');

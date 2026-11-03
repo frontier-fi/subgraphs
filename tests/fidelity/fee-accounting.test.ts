@@ -59,16 +59,29 @@ describe("Swap / protocol fee accounting", () => {
     expect(body).toMatch(/totalSwapFeeDelta/);
   });
 
-  it("dynamic swaps do not add the full fee to both static and dynamic counters", () => {
+  it("static and dynamic swap fee counters partition totalSwapFee", () => {
     const body = extractFunction(
       readRepo("subgraphs/vault/src/mappings/vault.ts"),
       "handleSwap"
     )!;
-    const staticAlwaysFull =
-      /totalStaticSwapFee\s*=\s*poolTokenIn\.totalStaticSwapFee\.plus\(\s*swapFeeAmount\s*\)/.test(
-        body
+    expect(body).toMatch(
+      /if\s*\(\s*hasDynamicSwapFee\s*\)\s*\{\s*poolTokenIn\.totalDynamicSwapFee\s*=\s*poolTokenIn\.totalDynamicSwapFee\.plus\(\s*swapFeeAmount\s*\);?\s*\}\s*else\s*\{\s*poolTokenIn\.totalStaticSwapFee\s*=\s*poolTokenIn\.totalStaticSwapFee\.plus\(\s*swapFeeAmount\s*\)/
+    );
+    expect(body).not.toMatch(/totalStaticSwapFee\.plus\(\s*swapFeeBaseAmount/);
+  });
+
+  it("controller fee-percentage events do not overwrite the Vault aggregate", () => {
+    const src = readRepo("subgraphs/vault/src/mappings/controller.ts");
+    for (const name of [
+      "handlePoolCreatorSwapFeePercentageChanged",
+      "handlePoolCreatorYieldFeePercentageChanged",
+      "handleProtocolSwapFeePercentageChanged",
+      "handleProtocolYieldFeePercentageChanged",
+    ]) {
+      expect(extractFunction(src, name)!).not.toMatch(
+        /aggregate(Swap|Yield)Fee\s*=/
       );
-    expect(staticAlwaysFull).toBe(false);
+    }
   });
 
   it("ProtocolSwapFeeCollected splits the full aggregate and clears vault pending", () => {
@@ -88,6 +101,23 @@ describe("Swap / protocol fee accounting", () => {
     expect(apply).toMatch(/vaultProtocolYieldFeeBalance\s*=\s*ZERO_BD/);
     expect(apply).toMatch(/vaultCreatorYieldFeeBalance\s*=\s*ZERO_BD/);
     expect(apply).toMatch(/floorAtZero|ZERO_BD/);
+  });
+
+  it("any collect event clears both swap and yield pending for the token", () => {
+    const apply = extractFunction(
+      readRepo("subgraphs/vault/src/mappings/controller.ts"),
+      "applyCollected"
+    )!;
+    // Vault collectAggregateFees zeroes both sides when either is non-zero.
+    expect(apply).not.toMatch(/if\s*\(\s*isSwap\s*\)\s*\{\s*poolToken\.vault/);
+    for (const field of [
+      "vaultProtocolSwapFeeBalance",
+      "vaultCreatorSwapFeeBalance",
+      "vaultProtocolYieldFeeBalance",
+      "vaultCreatorYieldFeeBalance",
+    ]) {
+      expect(apply).toMatch(new RegExp(`^\\s*poolToken\\.${field}\\s*=\\s*ZERO_BD`, "m"));
+    }
   });
 
   it("PoolCreatorFeesWithdrawn decrements controllerCreatorFeeBalance", () => {
@@ -116,6 +146,16 @@ describe("Swap / protocol fee accounting", () => {
     );
   });
 
+  it("swap fee accrual skips recovery mode and uses the Vault aggregate", () => {
+    const body = extractFunction(
+      readRepo("subgraphs/vault/src/helpers/entities.ts"),
+      "accrueVaultSwapFee"
+    )!;
+    expect(body).toMatch(/if\s*\(\s*pool\.isInRecoveryMode\s*\)\s*return/);
+    expect(body).toMatch(/pool\.aggregateSwapFee/);
+    expect(body).not.toMatch(/aggregateFeePercentage\(/);
+  });
+
   it("withdrawals do not drive controller balances negative", () => {
     const src = readRepo("subgraphs/vault/src/mappings/controller.ts");
     expect(src).toMatch(/function floorAtZero/);
@@ -124,6 +164,20 @@ describe("Swap / protocol fee accounting", () => {
     );
     expect(extractFunction(src, "handlePoolCreatorFeesWithdrawn")!).toMatch(
       /floorAtZero/
+    );
+  });
+
+  it("yield accrual splits only the new delta and keeps earlier pending shares", () => {
+    const body = extractFunction(
+      readRepo("subgraphs/vault/src/helpers/entities.ts"),
+      "updateProtocolYieldFeeAmounts"
+    )!;
+    expect(body).not.toMatch(/splitAggregateAmount\(\s*aggregateAmount/);
+    expect(body).toMatch(
+      /vaultProtocolYieldFeeBalance\s*=\s*previousProtocol\.plus\(\s*parts\[0\]\s*\)/
+    );
+    expect(body).toMatch(
+      /vaultCreatorYieldFeeBalance\s*=\s*previousCreator\.plus\(\s*parts\[1\]\s*\)/
     );
   });
 });

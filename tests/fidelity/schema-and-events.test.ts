@@ -104,4 +104,24 @@ describe("Pools factory versioning", () => {
     ].join("\n");
     expect(sources).toMatch(/getVersion|factoryVersion|VERSION/);
   });
+
+  it("a factory stored with version 0 is filled in by a later pool", () => {
+    const schema = readRepo("subgraphs/pools/schema.graphql");
+    expect(schema).toMatch(/type Factory @entity\(immutable: false\)/);
+    const body = extractFunction(
+      readRepo("subgraphs/pools/src/helpers/entities.ts"),
+      "getFactory"
+    )!;
+    expect(body).toMatch(/factory\.version\s*==\s*0\s*&&\s*version\s*!=\s*0/);
+  });
+});
+
+describe("Manifest generation", () => {
+  it("ambiguous networks skip constants instead of throwing", () => {
+    const src = readRepo("scripts/generate-manifests.js");
+    const resolve = extractFunction(src, "resolveConstantsNetwork")!;
+    expect(resolve).not.toMatch(/throw new Error\(\s*['"]Multiple networks/);
+    expect(resolve).toMatch(/return null/);
+    expect(src).toMatch(/if\s*\(\s*constantsNetwork\s*\)/);
+  });
 });
