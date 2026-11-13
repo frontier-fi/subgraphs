@@ -4,6 +4,7 @@ import {
   InitialPoolAggregateSwapFeePercentage,
   InitialPoolAggregateYieldFeePercentage,
   PoolRegisteredWithFeeController,
+  ProtocolFeesWithdrawn,
   ProtocolSwapFeeCollected,
   ProtocolSwapFeePercentageChanged,
 } from "../src/types/templates/ProtocolFeeController/ProtocolFeeController";
@@ -12,10 +13,12 @@ import {
   handleInitialPoolAggregateSwapFeePercentage,
   handleInitialPoolAggregateYieldFeePercentage,
   handlePoolRegisteredWithFeeController,
+  handleProtocolFeesWithdrawn,
   handleProtocolSwapFeeCollected,
   handleProtocolSwapFeePercentageChanged,
 } from "../src/mappings/controller";
 import { accrueVaultSwapFee, updateProtocolYieldFeeAmounts } from "../src/helpers/entities";
+import { computeAggregateFeePercentageRaw } from "../src/helpers/math";
 import { Pool } from "../src/types/schema";
 import {
   CREATOR,
@@ -163,6 +166,47 @@ describe("aggregate fee collection", () => {
   });
 });
 
+describe("aggregate fee percentage", () => {
+  test("is protocol plus creator on the remainder, not the sum", () => {
+    // ProtocolFeeController: protocol + (1 - protocol) * creator.
+    assert.bigIntEquals(
+      wad("0.75"),
+      computeAggregateFeePercentageRaw(wad("0.5"), wad("0.5"))
+    );
+  });
+
+  test("truncates to the Vault's 24-bit fee precision (1e11)", () => {
+    // 0.1 + 0.9 * 0.123456789012345678 = 0.21111111011111111 -> 0.2111111
+    assert.bigIntEquals(
+      BigInt.fromString("211111100000000000"),
+      computeAggregateFeePercentageRaw(wad("0.1"), BigInt.fromString("123456789012345678"))
+    );
+  });
+});
+
+describe("fee withdrawals", () => {
+  test("never drive controller balances below zero", () => {
+    createTestPool();
+    let poolToken = createTestPoolToken(POOL, TOKEN_A, 0);
+    poolToken.controllerProtocolFeeBalance = bd("5");
+    poolToken.save();
+
+    handleProtocolFeesWithdrawn(
+      changetype<ProtocolFeesWithdrawn>(
+        mockEvent([
+          addressParam("pool", POOL),
+          addressParam("token", TOKEN_A),
+          addressParam("recipient", CREATOR),
+          uintParam("amount", wad("7")),
+        ])
+      )
+    );
+
+    poolToken = loadTestPoolToken(POOL, TOKEN_A);
+    assertBd(poolToken.controllerProtocolFeeBalance, "0", "controllerProtocol");
+  });
+});
+
 describe("swap fee accrual", () => {
   test("uses the Vault aggregate fee and splits protocol and creator", () => {
     let pool = createTestPool();
@@ -220,6 +264,38 @@ describe("yield fee accrual", () => {
     assertBd(poolToken.vaultCreatorYieldFeeBalance, "25", "vaultCreatorYield");
     assertBd(poolToken.totalProtocolYieldFee, "150", "totalProtocolYield");
     assertBd(poolToken.totalCreatorYieldFee, "25", "totalCreatorYield");
+  });
+
+  test("an exempt pool with a creator yield fee still accrues yield fees", () => {
+    let pool = createTestPool();
+    pool.protocolFeeExempt = true;
+    pool.poolCreatorYieldFee = bd("0.1");
+    pool.aggregateYieldFee = bd("0.1");
+    pool.save();
+    let poolToken = createTestPoolToken(POOL, TOKEN_A, 0);
+    poolToken.paysYieldFees = true;
+    poolToken.save();
+
+    mockAggregateYieldFeeAmount(POOL, TOKEN_A, wad("8"));
+    updateProtocolYieldFeeAmounts(pool);
+
+    poolToken = loadTestPoolToken(POOL, TOKEN_A);
+    assertBd(poolToken.vaultCreatorYieldFeeBalance, "8", "vaultCreatorYield");
+    assertBd(poolToken.vaultProtocolYieldFeeBalance, "0", "vaultProtocolYield");
+    assertBd(poolToken.totalCreatorYieldFee, "8", "totalCreatorYield");
+  });
+
+  test("a zero aggregate yield fee makes no eth_call and changes nothing", () => {
+    let pool = createTestPool();
+    let poolToken = createTestPoolToken(POOL, TOKEN_A, 0);
+    poolToken.paysYieldFees = true;
+    poolToken.save();
+
+    // No getAggregateYieldFeeAmount mock: calling it would fail the test.
+    updateProtocolYieldFeeAmounts(pool);
+
+    poolToken = loadTestPoolToken(POOL, TOKEN_A);
+    assertBd(poolToken.totalProtocolYieldFee, "0", "totalProtocolYield");
   });
 
   test("scales pending shares down when the aggregate shrinks without a collect", () => {

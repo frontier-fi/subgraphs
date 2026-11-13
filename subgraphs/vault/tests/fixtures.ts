@@ -1,6 +1,17 @@
-import { Address, BigDecimal, BigInt, ethereum } from "@graphprotocol/graph-ts";
-import { createMockedFunction, newMockEvent } from "matchstick-as/assembly/index";
-import { Pool, PoolToken, Token } from "../src/types/schema";
+import {
+  Address,
+  BigDecimal,
+  BigInt,
+  Bytes,
+  DataSourceContext,
+  ethereum,
+} from "@graphprotocol/graph-ts";
+import {
+  createMockedFunction,
+  dataSourceMock,
+  newMockEvent,
+} from "matchstick-as/assembly/index";
+import { Pool, PoolToken, Token, Vault } from "../src/types/schema";
 import { VAULT_ADDRESS, ZERO_ADDRESS, ZERO_BD } from "../src/helpers/constants";
 
 export const POOL = Address.fromString("0x00000000000000000000000000000000000000a1");
@@ -20,11 +31,11 @@ export function wad(value: string): BigInt {
   );
 }
 
-export function createTestToken(address: Address): Token {
+export function createTestToken(address: Address, decimals: i32 = 18): Token {
   let token = new Token(address);
   token.name = "Token";
   token.symbol = "TKN";
-  token.decimals = 18;
+  token.decimals = decimals;
   token.address = address;
   token.isErc4626 = false;
   token.underlyingToken = null;
@@ -71,15 +82,16 @@ export function createTestPool(address: Address = POOL): Pool {
 export function createTestPoolToken(
   pool: Address,
   token: Address,
-  index: i32
+  index: i32,
+  decimals: i32 = 18
 ): PoolToken {
-  createTestToken(token);
+  createTestToken(token, decimals);
   let poolToken = new PoolToken(pool.concat(token));
   poolToken.pool = pool;
   poolToken.index = index;
   poolToken.name = "Token";
   poolToken.symbol = "TKN";
-  poolToken.decimals = 18;
+  poolToken.decimals = decimals;
   poolToken.address = token;
   poolToken.token = token;
   poolToken.tokenType = 0;
@@ -106,6 +118,48 @@ export function createTestPoolToken(
   poolToken.vaultCreatorYieldFeeBalance = ZERO_BD;
   poolToken.save();
   return poolToken;
+}
+
+/** Vault entity, so getVault() does not hit getProtocolFeeController/getAuthorizer. */
+export function createTestVault(): Vault {
+  let vault = new Vault(VAULT_ADDRESS);
+  vault.authorizer = ZERO_ADDRESS;
+  vault.protocolFeeController = ZERO_ADDRESS;
+  vault.isPaused = false;
+  vault.isBuffersPaused = false;
+  vault.protocolSwapFee = ZERO_BD;
+  vault.protocolYieldFee = ZERO_BD;
+  vault.save();
+  return vault;
+}
+
+/** Event entities (Swap, AddRemove, BufferWrapUnwrap) save from this block on. */
+export function setStoreEventsFrom(block: i32): void {
+  let context = new DataSourceContext();
+  context.setBigInt("storeEventsFrom", BigInt.fromI32(block));
+  dataSourceMock.setContext(context);
+}
+
+/** Vault bufferBalances: [16 bytes wrapped | 16 bytes underlying]. */
+export function bufferBalances(wrappedRaw: BigInt, underlyingRaw: BigInt): Bytes {
+  return Bytes.fromHexString("0x" + hex32(wrappedRaw) + hex32(underlyingRaw));
+}
+
+function hex32(value: BigInt): string {
+  let hex = value.toHexString().slice(2);
+  while (hex.length < 32) hex = "0" + hex;
+  return hex;
+}
+
+export function bytes32Param(name: string, value: Bytes): ethereum.EventParam {
+  return new ethereum.EventParam(name, ethereum.Value.fromFixedBytes(value));
+}
+
+export function uintArrayParam(name: string, values: BigInt[]): ethereum.EventParam {
+  return new ethereum.EventParam(
+    name,
+    ethereum.Value.fromUnsignedBigIntArray(values)
+  );
 }
 
 export function loadTestPoolToken(pool: Address, token: Address): PoolToken {

@@ -1,4 +1,11 @@
-import { afterEach, assert, clearStore, describe, test } from "matchstick-as/assembly/index";
+import {
+  afterEach,
+  assert,
+  clearStore,
+  dataSourceMock,
+  describe,
+  test,
+} from "matchstick-as/assembly/index";
 import { Address, BigInt } from "@graphprotocol/graph-ts";
 import { Swap as SwapEvent } from "../src/types/Vault/Vault";
 import { Transfer } from "../src/types/templates/BPT/BPT";
@@ -6,7 +13,7 @@ import { handleSwap } from "../src/mappings/vault";
 import { handleTransfer } from "../src/mappings/bpt";
 import { getPoolShareId } from "../src/helpers/entities";
 import { VAULT_ADDRESS, ZERO_ADDRESS } from "../src/helpers/constants";
-import { Pool, PoolShare } from "../src/types/schema";
+import { Pool, PoolShare, Swap } from "../src/types/schema";
 import {
   HOLDER,
   POOL,
@@ -20,12 +27,14 @@ import {
   loadTestPoolToken,
   mockEvent,
   mockPoolTokenInfo,
+  setStoreEventsFrom,
   uintParam,
   wad,
 } from "./fixtures";
 
 afterEach(() => {
   clearStore();
+  dataSourceMock.resetValues();
 });
 
 function swapEvent(swapFeePercentage: BigInt, swapFeeAmount: BigInt): SwapEvent {
@@ -54,7 +63,16 @@ function setUpSwapPool(): void {
 describe("swap fee counters", () => {
   test("a static-fee swap counts only toward totalStaticSwapFee", () => {
     setUpSwapPool();
-    handleSwap(swapEvent(wad("0.01"), wad("1")));
+    setStoreEventsFrom(1);
+    let event = swapEvent(wad("0.01"), wad("1"));
+    handleSwap(event);
+
+    // The Vault Swap event has no swapper; user is the transaction sender.
+    let swap = Swap.load(
+      event.transaction.hash.concatI32(event.logIndex.toI32())
+    ) as Swap;
+    assert.bytesEquals(swap.user, event.transaction.from);
+    assert.booleanEquals(swap.hasDynamicSwapFee, false);
 
     let poolToken = loadTestPoolToken(POOL, TOKEN_A);
     assertBd(poolToken.totalSwapFee, "1", "totalSwapFee");
