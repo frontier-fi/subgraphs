@@ -3,6 +3,10 @@ const path = require('path');
 
 const networksData = JSON.parse(fs.readFileSync('networks.json', 'utf8'));
 
+// --constants-only: only write the vault constants.ts (build-all.sh and deploy.sh
+// switch it per network after the manifests are generated once).
+const constantsOnly = process.argv.includes('--constants-only');
+
 /**
  * Optional: GENERATE_NETWORK=sepolia — defaults to the sole network or "sepolia".
  * Returns null when the choice is ambiguous; build-all.sh and deploy.sh then
@@ -89,7 +93,7 @@ function replacePlaceholders(template, network, networkData) {
   return result + '\n';
 }
 
-['pools', 'vault'].forEach(subgraph => {
+(constantsOnly ? [] : ['pools', 'vault']).forEach(subgraph => {
   const templatePath = path.join('subgraphs', subgraph, 'template.yaml');
   
   if (!fs.existsSync(templatePath)) {
@@ -109,6 +113,8 @@ function replacePlaceholders(template, network, networkData) {
 const constantsNetwork = resolveConstantsNetwork();
 if (constantsNetwork) {
   generateVaultConstants(constantsNetwork);
+} else if (constantsOnly) {
+  throw new Error('--constants-only needs GENERATE_NETWORK when networks.json is ambiguous');
 } else {
   console.warn(
     'Multiple networks in networks.json and GENERATE_NETWORK unset — skipping vault constants.ts'

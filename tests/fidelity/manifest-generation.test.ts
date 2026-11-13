@@ -31,8 +31,8 @@ function scratchRepo(networks: Record<string, unknown>): string {
   return dir;
 }
 
-function generate(dir: string, env: Record<string, string> = {}): void {
-  execFileSync("node", ["scripts/generate-manifests.js"], {
+function generate(dir: string, env: Record<string, string> = {}, args: string[] = []): void {
+  execFileSync("node", ["scripts/generate-manifests.js", ...args], {
     cwd: dir,
     stdio: "pipe",
     env: { ...process.env, ...env },
@@ -73,5 +73,17 @@ describe("Manifest generation", () => {
   it("rejects a GENERATE_NETWORK missing from networks.json", () => {
     const dir = scratchRepo(twoNonSepoliaNetworks());
     expect(() => generate(dir, { GENERATE_NETWORK: "base" })).toThrow();
+  });
+
+  it("--constants-only writes constants.ts and no manifests", () => {
+    const dir = scratchRepo(twoNonSepoliaNetworks());
+    generate(dir, { GENERATE_NETWORK: "arbitrum" }, ["--constants-only"]);
+    expect(readFileSync(join(dir, CONSTANTS), "utf8")).toContain(ARBITRUM_VAULT);
+    expect(existsSync(join(dir, "subgraphs/vault/subgraph.arbitrum.yaml"))).toBe(false);
+  });
+
+  it("--constants-only needs GENERATE_NETWORK when the network is ambiguous", () => {
+    const dir = scratchRepo(twoNonSepoliaNetworks());
+    expect(() => generate(dir, {}, ["--constants-only"])).toThrow();
   });
 });

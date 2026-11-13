@@ -24,7 +24,7 @@ for pkg in vault pools; do
     network="${network%.yaml}"
     if [ "$pkg" = "vault" ]; then
       echo ":: generating vault constants for ${network}"
-      GENERATE_NETWORK="$network" pnpm generate-manifests
+      GENERATE_NETWORK="$network" pnpm generate-manifests --constants-only
     fi
     echo ":: building ${pkg} (${file})"
     pnpm "$pkg" build "$file"

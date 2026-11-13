@@ -79,7 +79,7 @@ for network in "${NETWORKS[@]}"; do
 
   if [ "$SUBGRAPH_TYPE" = "vault" ]; then
     echo "  Generating vault constants for ${network}"
-    (cd "$ROOT" && GENERATE_NETWORK="$network" pnpm generate-manifests)
+    (cd "$ROOT" && GENERATE_NETWORK="$network" pnpm generate-manifests --constants-only)
   fi
 
   echo "  Deploying..."
