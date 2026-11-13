@@ -2,7 +2,6 @@ import {
   afterEach,
   assert,
   clearStore,
-  createMockedFunction,
   describe,
   newMockEvent,
   test,
@@ -30,27 +29,15 @@ function uintParam(name: string, value: i64): ethereum.EventParam {
   );
 }
 
-function mockAmplificationParameter(value: i64, isUpdating: boolean): void {
-  createMockedFunction(
-    POOL,
-    "getAmplificationParameter",
-    "getAmplificationParameter():(uint256,bool,uint256)"
-  ).returns([
-    ethereum.Value.fromUnsignedBigInt(BigInt.fromI64(value)),
-    ethereum.Value.fromBoolean(isUpdating),
-    ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(1000)),
-  ]);
-}
-
 function assertBd(actual: BigDecimal, expected: string, label: string): void {
   if (!actual.equals(BigDecimal.fromString(expected))) {
     throw new Error(label + ": expected " + expected + ", got " + actual.toString());
   }
 }
 
+// No getAmplificationParameter mock: the amp handlers must not call the pool.
 describe("amp ramp events", () => {
   test("AmpUpdateStarted keeps fractional AMP_PRECISION-scaled endpoints", () => {
-    mockAmplificationParameter(150500, true);
     let event = changetype<AmpUpdateStarted>(newMockEvent());
     event.address = POOL;
     event.parameters = [
@@ -67,11 +54,12 @@ describe("amp ramp events", () => {
     assertBd(params.ampEndValue, "400", "ampEndValue");
     assert.bigIntEquals(params.ampStartTime, BigInt.fromI32(1000));
     assert.bigIntEquals(params.ampEndTime, BigInt.fromI32(2000));
-    assert.bigIntEquals(params.amp, BigInt.fromI32(150));
+    // The ramp starts from the current amp, so startValue is the amp now.
+    assert.bigIntEquals(BigInt.fromI32(150500), params.ampRaw);
+    assert.bigIntEquals(BigInt.fromI32(150), params.amp);
   });
 
   test("AmpUpdateStopped clears the ramp and stores the current amp", () => {
-    mockAmplificationParameter(150500, true);
     let started = changetype<AmpUpdateStarted>(newMockEvent());
     started.address = POOL;
     started.parameters = [
@@ -82,15 +70,15 @@ describe("amp ramp events", () => {
     ];
     handleAmpUpdateStarted(started);
 
-    mockAmplificationParameter(250000, false);
     let stopped = changetype<AmpUpdateStopped>(newMockEvent());
     stopped.address = POOL;
-    stopped.parameters = [uintParam("currentValue", 250000)];
+    stopped.parameters = [uintParam("currentValue", 250700)];
     handleAmpUpdateStopped(stopped);
 
     let params = StableParams.load(POOL) as StableParams;
     assert.booleanEquals(params.ampIsUpdating, false);
-    assert.bigIntEquals(params.amp, BigInt.fromI32(250));
+    assert.bigIntEquals(BigInt.fromI32(250700), params.ampRaw);
+    assert.bigIntEquals(BigInt.fromI32(250), params.amp);
     assertBd(params.ampStartValue, "0", "ampStartValue");
     assertBd(params.ampEndValue, "0", "ampEndValue");
     assert.bigIntEquals(params.ampEndTime, BigInt.zero());

@@ -27,8 +27,10 @@ type WeightedParams @entity(immutable: true) {
 type StableParams @entity(immutable: false) {
   "Unique identifier for the StablePoolParams"
   id: Bytes!
-  "Amplification parameter for Stable Pools"
+  "Amplification parameter, integer part (ampRaw / AMP_PRECISION). Set at creation and on amp events, so it lags the chain during a ramp"
   amp: BigInt!
+  "Amplification parameter as the pool reports it, scaled by AMP_PRECISION (1000). Same update rule as amp"
+  ampRaw: BigInt!
   "Set by AmpUpdateStarted, cleared by AmpUpdateStopped. A ramp that completes naturally emits no event, so compare ampEndTime to the current time"
   ampIsUpdating: Boolean!
   "Ramp start amplification value (divided by AMP_PRECISION, fraction kept)"

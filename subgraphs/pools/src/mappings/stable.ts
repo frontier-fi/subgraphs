@@ -6,6 +6,7 @@ import { StablePool } from "../types/StablePoolFactory/StablePool";
 import { StableParams } from "../types/schema";
 import { getFactoryVersion } from "../helpers/version";
 import { StablePool as StablePoolTemplate } from "../types/templates";
+import { setAmp } from "./amp";
 
 function handleStablePoolParams(poolAddress: Address): Bytes {
   let stablePool = StablePool.bind(poolAddress);
@@ -16,13 +17,10 @@ function handleStablePoolParams(poolAddress: Address): Bytes {
   stableParams.ampEndValue = BigDecimal.zero();
   stableParams.ampStartTime = BigInt.fromI32(0);
   stableParams.ampEndTime = BigInt.fromI32(0);
-  if (!ampResult.reverted) {
-    let ampValue = ampResult.value.value0;
-    let ampPrecision = ampResult.value.value2;
-    stableParams.amp = ampValue.div(ampPrecision);
-  } else {
-    stableParams.amp = BigInt.fromI32(0);
-  }
+  setAmp(
+    stableParams,
+    ampResult.reverted ? BigInt.fromI32(0) : ampResult.value.value0
+  );
   stableParams.save();
   return stableParams.id;
 }
