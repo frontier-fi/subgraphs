@@ -9,12 +9,14 @@
     "build:all": "bash scripts/build-all.sh",
     "test": "vitest run",
     "test:fidelity": "vitest run tests/fidelity",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "reconcile": "node scripts/reconcile.mjs"
   },
   "prettier": {
     "trailingComma": "es5"
   },
   "devDependencies": {
+    "viem": "2.57.19",
     "vitest": "3.2.4"
   }
 }

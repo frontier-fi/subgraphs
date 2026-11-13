@@ -34,6 +34,19 @@ Vitest suite under `tests/fidelity` asserts onchain fidelity against the vault a
 pnpm test:fidelity
 ```
 
+## Reconciliation
+
+`pnpm reconcile` reads both subgraphs at the latest block they have both indexed and compares every pool, token, holder, buffer and fee balance with the contracts at that same block.
+
+```bash
+RPC_URL=<sepolia rpc> \
+VAULT_SUBGRAPH_URL=<vault-sepolia query url> \
+POOLS_SUBGRAPH_URL=<pools-sepolia query url> \
+pnpm reconcile [--block <n>] [--json report.json] [--strict] [--tolerance <raw units>]
+```
+
+Each check is a `fact` (must match exactly), a `snapshot` (refreshed only on pool events, such as `priceRate` and `amp` during a ramp) or a `model` (subgraph fee attribution, allowed `--tolerance` raw units of drift, default 1000). The run exits 1 when a fact mismatches, or when anything mismatches with `--strict`. `NETWORK` selects the Vault address from `networks.json` (default `sepolia`).
+
 ## Deployment
 
 Deploys only run in CI (`.github/workflows/deploy.yml`) — not locally. Triggers:
