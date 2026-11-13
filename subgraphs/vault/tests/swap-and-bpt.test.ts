@@ -94,6 +94,58 @@ describe("swap fee counters", () => {
   });
 });
 
+function swapBetween(
+  tokenIn: Address,
+  tokenOut: Address,
+  amountInRaw: BigInt,
+  amountOutRaw: BigInt
+): SwapEvent {
+  let event = changetype<SwapEvent>(
+    mockEvent([
+      addressParam("pool", POOL),
+      addressParam("tokenIn", tokenIn),
+      addressParam("tokenOut", tokenOut),
+      uintParam("amountIn", amountInRaw),
+      uintParam("amountOut", amountOutRaw),
+      uintParam("swapFeePercentage", wad("0.01")),
+      uintParam("swapFeeAmount", BigInt.zero()),
+    ])
+  );
+  event.address = VAULT_ADDRESS;
+  return event;
+}
+
+// TOKEN_B (6 decimals) sits at index 0 and is created first; TOKEN_A
+// (18 decimals) at index 1. Reading either balance at the other token's
+// index gives a wrong value.
+function setUpBalances(): void {
+  createTestPool();
+  createTestPoolToken(POOL, TOKEN_B, 0, 6);
+  createTestPoolToken(POOL, TOKEN_A, 1);
+  mockPoolTokenInfo(POOL, [TOKEN_B, TOKEN_A], [BigInt.fromI32(910000000), wad("1100")]);
+}
+
+describe("swap balances", () => {
+  test("store each token's own balance when swapping A for B", () => {
+    setUpBalances();
+    handleSwap(swapBetween(TOKEN_A, TOKEN_B, wad("100"), BigInt.fromI32(90000000)));
+
+    assertBd(loadTestPoolToken(POOL, TOKEN_A).balance, "1100", "balance A");
+    assertBd(loadTestPoolToken(POOL, TOKEN_B).balance, "910", "balance B");
+    assertBd(loadTestPoolToken(POOL, TOKEN_A).volume, "100", "volume A");
+    assertBd(loadTestPoolToken(POOL, TOKEN_B).volume, "90", "volume B");
+  });
+
+  test("store each token's own balance when swapping B for A", () => {
+    setUpBalances();
+    handleSwap(swapBetween(TOKEN_B, TOKEN_A, BigInt.fromI32(90000000), wad("100")));
+
+    assertBd(loadTestPoolToken(POOL, TOKEN_A).balance, "1100", "balance A");
+    assertBd(loadTestPoolToken(POOL, TOKEN_B).balance, "910", "balance B");
+    assertBd(loadTestPoolToken(POOL, TOKEN_B).volume, "90", "volume B");
+  });
+});
+
 function transferEvent(from: Address, to: Address, value: BigInt): Transfer {
   let event = changetype<Transfer>(
     mockEvent([addressParam("from", from), addressParam("to", to), uintParam("value", value)])

@@ -12,6 +12,7 @@ import {
   BufferSharesBurned,
   BufferSharesMinted,
   LiquidityAddedToBuffer,
+  LiquidityRemovedFromBuffer,
   Unwrap,
   Wrap,
 } from "../src/types/Vault/Vault";
@@ -20,6 +21,7 @@ import {
   handleBufferSharesBurned,
   handleBufferSharesMinted,
   handleLiquidityAddedToBuffer,
+  handleLiquidityRemovedFromBuffer,
   handleUnwrap,
   handleWrap,
 } from "../src/mappings/vault";
@@ -135,6 +137,34 @@ describe("buffer balances", () => {
     let buffer = Buffer.load(WRAPPED) as Buffer;
     assertBd(buffer.wrappedBalance, "40", "wrappedBalance");
     assertBd(buffer.underlyingBalance, "50", "underlyingBalance");
+  });
+
+  test("LiquidityRemovedFromBuffer applies the remaining absolute balances", () => {
+    setUpTokens();
+    handleLiquidityAddedToBuffer(
+      changetype<LiquidityAddedToBuffer>(
+        mockEvent([
+          addressParam("wrappedToken", WRAPPED),
+          uintParam("amountUnderlying", e6(50)),
+          uintParam("amountWrapped", e18(40)),
+          bytes32Param("bufferBalances", bufferBalances(e18(40), e6(50))),
+        ])
+      )
+    );
+    handleLiquidityRemovedFromBuffer(
+      changetype<LiquidityRemovedFromBuffer>(
+        mockEvent([
+          addressParam("wrappedToken", WRAPPED),
+          uintParam("amountUnderlying", e6(20)),
+          uintParam("amountWrapped", e18(15)),
+          bytes32Param("bufferBalances", bufferBalances(e18(25), e6(30))),
+        ])
+      )
+    );
+
+    let buffer = Buffer.load(WRAPPED) as Buffer;
+    assertBd(buffer.wrappedBalance, "25", "wrappedBalance");
+    assertBd(buffer.underlyingBalance, "30", "underlyingBalance");
   });
 
   test("BufferShares mint and burn net out on the same BufferShare", () => {
