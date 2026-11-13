@@ -178,6 +178,10 @@ export function handlePoolRegistered(event: PoolRegistered): void {
   // Fee-controller logs for this pool are emitted before PoolRegistered.
   applyPendingPoolFeeInit(pool);
 
+  // Rate tokens otherwise keep the priceRate = 1 placeholder until the pool's
+  // first swap or liquidity change, which an idle pool may never have.
+  updatePoolTokenRates(pool);
+
   // Parent pools that already listed this BPT as a token get nestedPool filled in.
   linkNestedPoolToPoolTokens(poolAddress);
 

@@ -134,6 +134,16 @@ describe("PoolRegistered", () => {
     createMockedFunction(TOKEN_B, "asset", "asset():(address)").returns([
       ethereum.Value.fromAddress(UNDERLYING),
     ]);
+    createMockedFunction(
+      VAULT_ADDRESS,
+      "getPoolTokenRates",
+      "getPoolTokenRates(address):(uint256[],uint256[])"
+    )
+      .withArgs([ethereum.Value.fromAddress(POOL)])
+      .returns([
+        ethereum.Value.fromUnsignedBigIntArray([wad("1"), wad("1")]),
+        ethereum.Value.fromUnsignedBigIntArray([wad("1"), wad("2.5")]),
+      ]);
 
     handlePoolRegistered(
       poolRegisteredEvent(POOL, [
@@ -155,6 +165,9 @@ describe("PoolRegistered", () => {
     assert.i32Equals(withRate.index, 1);
     assert.booleanEquals(withRate.paysYieldFees, true);
     assert.bytesEquals(withRate.token, TOKEN_B);
+    // Rates are read at registration, not left at 1 until the first swap.
+    assertBd(withRate.priceRate, "2.5", "priceRate");
+    assertBd(standard.priceRate, "1", "priceRate A");
 
     // One RateProvider row per token, including address(0), in registration order.
     assert.entityCount("RateProvider", 2);
