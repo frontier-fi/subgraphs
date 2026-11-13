@@ -158,21 +158,21 @@ type PoolToken @entity(immutable: false) {
   address: Bytes!
   "Token entity for this pool token (same id as address)"
   token: Token!
-  "TokenType enum from PoolRegistered (0=STANDARD, 1=TOKEN_WITH_RATE, 2=ERC4626)"
+  "TokenType enum from PoolRegistered (0=STANDARD, 1=WITH_RATE). ERC-4626 tokens are WITH_RATE; see Token.isErc4626"
   tokenType: Int!
   "Rate provider from PoolRegistered. Zero address when the token has none."
   rateProvider: Bytes!
-  "Current balance of this token in the Pool"
+  "Balance of this token in the Pool, read from the Vault at the end of the block of the pool's last swap or liquidity change"
   balance: BigDecimal!
   "Total volume of this token traded in the Pool"
   volume: BigDecimal!
   "Total swap fees collected for this token"
   totalSwapFee: BigDecimal!
-  "Total base swap fees collected using static swap fee"
+  "Estimate: base part of swap fees, recomputed as amountIn x static fee. The Vault charges fees on the given amount, so this is approximate for exact-out swaps and tokens with rates"
   totalSwapFeeBase: BigDecimal!
-  "Total difference in swap fees collected due to dynamic fees"
+  "Estimate: dynamic part of swap fees (see totalSwapFeeBase)"
   totalSwapFeeDelta: BigDecimal!
-  "Total swap fees from swaps at the pool's static fee percentage"
+  "Total swap fees from swaps at the pool's static fee percentage. A swap counts as dynamic when its fee percentage differs from the indexed static fee"
   totalStaticSwapFee: BigDecimal!
   "Total swap fees from swaps at a dynamic (hook) fee percentage; static + dynamic = totalSwapFee"
   totalDynamicSwapFee: BigDecimal!
@@ -180,31 +180,31 @@ type PoolToken @entity(immutable: false) {
   buffer: Buffer
   "Nested Pool associated with this token, if any"
   nestedPool: Pool
-  "Current price rate for this token"
+  "Token rate from the Vault, refreshed at registration and on the pool's swaps and liquidity changes. Rate providers move in between, so it can lag the chain"
   priceRate: BigDecimal!
   "Scaling factor for this token"
   scalingFactor: BigInt!
-  "Total protocol swap fees collected for this token"
+  "Estimate: protocol swap fees, attributed when accrued at the percentages then in force. Onchain attribution happens at collection"
   totalProtocolSwapFee: BigDecimal!
-  "Total protocol yield fees collected for this token"
+  "Estimate: protocol yield fees, attributed when accrued (see totalProtocolSwapFee)"
   totalProtocolYieldFee: BigDecimal!
-  "Total pool-creator swap fees accrued for this token"
+  "Estimate: pool-creator swap fees, attributed when accrued (see totalProtocolSwapFee)"
   totalCreatorSwapFee: BigDecimal!
-  "Total pool-creator yield fees accrued for this token"
+  "Estimate: pool-creator yield fees, attributed when accrued (see totalProtocolSwapFee)"
   totalCreatorYieldFee: BigDecimal!
   "Indicates whether this token pays yield fees"
   paysYieldFees: Boolean!
-  "Protocol fees available for withdrawal from the Controlller"
+  "Estimate of getProtocolFeeAmounts: collected fees split by the subgraph with exact decimals, which can differ by dust from the Controller's integer rounding"
   controllerProtocolFeeBalance: BigDecimal!
-  "Pool-creator fees available for withdrawal from the Controller"
+  "Estimate of getPoolCreatorFeeAmounts (see controllerProtocolFeeBalance)"
   controllerCreatorFeeBalance: BigDecimal!
-  "Protocol swap fees pending collection in the Vault"
+  "Estimate: protocol share of swap fees pending in the Vault. The Vault holds one aggregate per token (getAggregateSwapFeeAmount); the Controller splits it only at collection"
   vaultProtocolSwapFeeBalance: BigDecimal!
-  "Protocol yield fees pending collection in the Vault"
+  "Estimate: protocol share of yield fees pending in the Vault (see vaultProtocolSwapFeeBalance)"
   vaultProtocolYieldFeeBalance: BigDecimal!
-  "Pool-creator swap fees pending collection in the Vault"
+  "Estimate: pool-creator share of swap fees pending in the Vault (see vaultProtocolSwapFeeBalance)"
   vaultCreatorSwapFeeBalance: BigDecimal!
-  "Pool-creator yield fees pending collection in the Vault"
+  "Estimate: pool-creator share of yield fees pending in the Vault (see vaultProtocolSwapFeeBalance)"
   vaultCreatorYieldFeeBalance: BigDecimal!
 }
 
@@ -312,9 +312,9 @@ type Swap @entity(immutable: true) {
   swapFeeToken: Bytes!
   "Amount of swap fees"
   swapFeeAmount: BigDecimal!
-  "Base fee amount calculated using static swap fee"
+  "Estimate: base fee, recomputed as amountIn x static fee (approximate for exact-out swaps and tokens with rates)"
   swapFeeBaseAmount: BigDecimal!
-  "Difference between actual fee amount and base fee amount due to dynamic fees"
+  "Estimate: dynamic part of the fee (see swapFeeBaseAmount)"
   swapFeeDeltaAmount: BigDecimal!
   "Swap fee percentage"
   swapFeePercentage: BigDecimal!
