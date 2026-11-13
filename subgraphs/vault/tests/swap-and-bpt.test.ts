@@ -26,7 +26,7 @@ import {
   createTestPoolToken,
   loadTestPoolToken,
   mockEvent,
-  mockPoolTokenInfo,
+  mockPoolData,
   setStoreEventsFrom,
   uintParam,
   wad,
@@ -57,7 +57,7 @@ function setUpSwapPool(): void {
   createTestPool(); // static swap fee 1%
   createTestPoolToken(POOL, TOKEN_A, 0);
   createTestPoolToken(POOL, TOKEN_B, 1);
-  mockPoolTokenInfo(POOL, [TOKEN_A, TOKEN_B], [wad("1100"), wad("910")]);
+  mockPoolData(POOL, [TOKEN_A, TOKEN_B], [wad("1100"), wad("910")], [wad("1"), wad("1")]);
 }
 
 describe("swap fee counters", () => {

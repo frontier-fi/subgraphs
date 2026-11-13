@@ -34,6 +34,7 @@ import {
   TOKEN_B,
   addressParam,
   assertBd,
+  bd,
   boolParam,
   createTestPool,
   createTestPoolToken,
@@ -41,6 +42,8 @@ import {
   createTestVault,
   loadTestPoolToken,
   mockEvent,
+  mockPoolData,
+  mockPoolDataReverts,
   mockPoolTokenInfo,
   setStoreEventsFrom,
   uintArrayParam,
@@ -207,7 +210,12 @@ function setUpLiquidityPool(): void {
   // Created out of index order, so a derived load returns them shuffled.
   createTestPoolToken(POOL, TOKEN_B, 1, 6);
   createTestPoolToken(POOL, TOKEN_A, 0);
-  mockPoolTokenInfo(POOL, [TOKEN_A, TOKEN_B], [wad("110"), BigInt.fromI32(220000000)]);
+  mockPoolData(
+    POOL,
+    [TOKEN_A, TOKEN_B],
+    [wad("110"), BigInt.fromI32(220000000)],
+    [wad("1"), wad("1.05")]
+  );
 }
 
 describe("LiquidityAdded and LiquidityRemoved", () => {
@@ -255,26 +263,28 @@ describe("LiquidityAdded and LiquidityRemoved", () => {
     assertBd(remove.amounts[1], "4", "amounts[1]");
   });
 
-  test("refreshes priceRate from getPoolTokenRates when a token has a rate", () => {
+  test("takes balances and rates from one getPoolData call", () => {
     setUpLiquidityPool();
-    let withRate = loadTestPoolToken(POOL, TOKEN_B);
-    withRate.tokenType = 1;
-    withRate.save();
-    createMockedFunction(
-      VAULT_ADDRESS,
-      "getPoolTokenRates",
-      "getPoolTokenRates(address):(uint256[],uint256[])"
-    )
-      .withArgs([ethereum.Value.fromAddress(POOL)])
-      .returns([
-        ethereum.Value.fromUnsignedBigIntArray([wad("1"), wad("1")]),
-        ethereum.Value.fromUnsignedBigIntArray([wad("1"), wad("1.05")]),
-      ]);
-
+    // No getPoolTokenInfo or getPoolTokenRates mock: only getPoolData may be called.
     handleLiquidityAdded(liquidityAddedEvent([wad("10"), BigInt.fromI32(20000000)]));
 
     assertBd(loadTestPoolToken(POOL, TOKEN_B).priceRate, "1.05", "priceRate");
     assertBd(loadTestPoolToken(POOL, TOKEN_A).priceRate, "1", "priceRate A");
+  });
+
+  test("falls back to getPoolTokenInfo and keeps rates when getPoolData reverts", () => {
+    setUpLiquidityPool();
+    let withRate = loadTestPoolToken(POOL, TOKEN_B);
+    withRate.priceRate = bd("1.01");
+    withRate.save();
+    mockPoolDataReverts(POOL);
+    mockPoolTokenInfo(POOL, [TOKEN_A, TOKEN_B], [wad("120"), BigInt.fromI32(230000000)]);
+
+    handleLiquidityAdded(liquidityAddedEvent([wad("10"), BigInt.fromI32(20000000)]));
+
+    assertBd(loadTestPoolToken(POOL, TOKEN_A).balance, "120", "balance A");
+    assertBd(loadTestPoolToken(POOL, TOKEN_B).balance, "230", "balance B");
+    assertBd(loadTestPoolToken(POOL, TOKEN_B).priceRate, "1.01", "priceRate");
   });
 });
 

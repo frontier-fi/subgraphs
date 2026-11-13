@@ -41,6 +41,7 @@ import {
 } from "../types/schema";
 import {
   accrueVaultSwapFee,
+  applyPriceRates,
   createPoolToken,
   createRateProvider,
   linkBufferToPoolTokens,
@@ -49,6 +50,8 @@ import {
   getVault,
   probeErc4626,
   loadPoolToken,
+  loadPoolTokenState,
+  setPriceRate,
   updatePoolTokenRates,
   updateProtocolYieldFeeAmounts,
 } from "../helpers/entities";
@@ -210,8 +213,7 @@ export function handleLiquidityAdded(event: LiquidityAdded): void {
   let poolTokens = pool.tokens.load();
   let joinAmounts = new Array<BigDecimal>(amountsAddedRaw.length);
 
-  let vault = VaultExtension.bind(event.address);
-  let poolTokensInfo = vault.getPoolTokenInfo(poolAddress);
+  let state = loadPoolTokenState(event.address, poolAddress);
 
   for (let i: i32 = 0; i < poolTokens.length; i++) {
     let poolToken = poolTokens[i];
@@ -222,9 +224,10 @@ export function handleLiquidityAdded(event: LiquidityAdded): void {
     joinAmounts[poolToken.index] = joinAmount;
 
     poolToken.balance = scaleDown(
-      poolTokensInfo.getBalancesRaw()[poolToken.index],
+      state.balancesRaw[poolToken.index],
       poolToken.decimals
     );
+    setPriceRate(poolToken, state);
 
     accrueVaultSwapFee(
       poolToken,
@@ -252,7 +255,6 @@ export function handleLiquidityAdded(event: LiquidityAdded): void {
     join.save();
   }
 
-  updatePoolTokenRates(pool);
   updateProtocolYieldFeeAmounts(pool);
 }
 
@@ -278,8 +280,7 @@ export function handleLiquidityRemoved(event: LiquidityRemoved): void {
   let poolTokens = pool.tokens.load();
   let exitAmounts = new Array<BigDecimal>(amounts.length);
 
-  let vault = VaultExtension.bind(event.address);
-  let poolTokensInfo = vault.getPoolTokenInfo(poolAddress);
+  let state = loadPoolTokenState(event.address, poolAddress);
 
   for (let i: i32 = 0; i < poolTokens.length; i++) {
     let poolToken = poolTokens[i];
@@ -290,9 +291,10 @@ export function handleLiquidityRemoved(event: LiquidityRemoved): void {
     exitAmounts[poolToken.index] = exitAmount;
 
     poolToken.balance = scaleDown(
-      poolTokensInfo.getBalancesRaw()[poolToken.index],
+      state.balancesRaw[poolToken.index],
       poolToken.decimals
     );
+    setPriceRate(poolToken, state);
 
     accrueVaultSwapFee(
       poolToken,
@@ -320,7 +322,6 @@ export function handleLiquidityRemoved(event: LiquidityRemoved): void {
     exit.save();
   }
 
-  updatePoolTokenRates(pool);
   updateProtocolYieldFeeAmounts(pool);
 }
 
@@ -415,13 +416,13 @@ export function handleSwap(event: SwapEvent): void {
     return;
   }
 
-  let vault = VaultExtension.bind(event.address);
-  let poolTokensInfo = vault.getPoolTokenInfo(poolAddress);
+  let state = loadPoolTokenState(event.address, poolAddress);
 
   poolTokenIn.balance = scaleDown(
-    poolTokensInfo.getBalancesRaw()[poolTokenIn.index],
+    state.balancesRaw[poolTokenIn.index],
     poolTokenIn.decimals
   );
+  setPriceRate(poolTokenIn, state);
   poolTokenIn.volume = poolTokenIn.volume.plus(tokenAmountIn);
   poolTokenIn.totalSwapFee = poolTokenIn.totalSwapFee.plus(swapFeeAmount);
   accrueVaultSwapFee(poolTokenIn, pool, event.params.swapFeeAmount);
@@ -444,13 +445,15 @@ export function handleSwap(event: SwapEvent): void {
   poolTokenIn.save();
 
   poolTokenOut.balance = scaleDown(
-    poolTokensInfo.getBalancesRaw()[poolTokenOut.index],
+    state.balancesRaw[poolTokenOut.index],
     poolTokenOut.decimals
   );
+  setPriceRate(poolTokenOut, state);
   poolTokenOut.volume = poolTokenOut.volume.plus(tokenAmountOut);
   poolTokenOut.save();
 
-  updatePoolTokenRates(pool);
+  // Other tokens of a multi-token pool: saved only when their rate moved.
+  applyPriceRates(pool, state);
   updateProtocolYieldFeeAmounts(pool);
 }
 

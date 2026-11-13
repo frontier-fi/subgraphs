@@ -388,6 +388,56 @@ export function updateProtocolYieldFeeAmounts(pool: Pool): void {
   }
 }
 
+/** Raw balances and, when available, token rates of a pool. */
+export class PoolTokenState {
+  balancesRaw: BigInt[];
+  tokenRates: BigInt[] | null;
+
+  constructor(balancesRaw: BigInt[], tokenRates: BigInt[] | null) {
+    this.balancesRaw = balancesRaw;
+    this.tokenRates = tokenRates;
+  }
+}
+
+/**
+ * Read balances and rates in one getPoolData call. It reverts for an
+ * uninitialized pool or a failing rate provider; then fall back to
+ * getPoolTokenInfo for balances and leave rates unchanged.
+ */
+export function loadPoolTokenState(
+  vaultAddress: Address,
+  poolAddress: Address
+): PoolTokenState {
+  let vault = VaultExtension.bind(vaultAddress);
+  let data = vault.try_getPoolData(poolAddress);
+  if (!data.reverted) {
+    return new PoolTokenState(data.value.balancesRaw, data.value.tokenRates);
+  }
+  let info = vault.getPoolTokenInfo(poolAddress);
+  return new PoolTokenState(info.getBalancesRaw(), null);
+}
+
+/** Set priceRate from state; returns true when it changed. */
+export function setPriceRate(poolToken: PoolToken, state: PoolTokenState): boolean {
+  let rates = state.tokenRates;
+  if (!rates) return false;
+  let idx = poolToken.index;
+  if (idx < 0 || idx >= rates.length) return false;
+  let rate = scaleDown(rates[idx], 18);
+  if (rate.equals(poolToken.priceRate)) return false;
+  poolToken.priceRate = rate;
+  return true;
+}
+
+/** Apply state's rates to every PoolToken of pool, saving only those that changed. */
+export function applyPriceRates(pool: Pool, state: PoolTokenState): void {
+  if (!state.tokenRates) return;
+  let poolTokens = pool.tokens.load();
+  for (let i = 0; i < poolTokens.length; i++) {
+    if (setPriceRate(poolTokens[i], state)) poolTokens[i].save();
+  }
+}
+
 export function updatePoolTokenRates(pool: Pool): void {
   let poolTokens = pool.tokens.load();
   // STANDARD tokens (tokenType 0) have a fixed rate of 1. Skip the eth_call

@@ -226,6 +226,50 @@ export function mockPoolTokenInfo(
     ]);
 }
 
+/** getPoolData with STANDARD tokens, the given raw balances and rates (18 decimals). */
+export function mockPoolData(
+  pool: Address,
+  tokens: Address[],
+  balancesRaw: BigInt[],
+  tokenRates: BigInt[]
+): void {
+  let configs: ethereum.Tuple[] = [];
+  let ones: BigInt[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    let config = new ethereum.Tuple();
+    config.push(ethereum.Value.fromUnsignedBigInt(BigInt.zero()));
+    config.push(ethereum.Value.fromAddress(ZERO_ADDRESS));
+    config.push(ethereum.Value.fromBoolean(false));
+    configs.push(config);
+    ones.push(BigInt.fromI32(1));
+  }
+  let data = new ethereum.Tuple();
+  data.push(ethereum.Value.fromFixedBytes(Bytes.fromHexString("0x" + "00".repeat(32))));
+  data.push(ethereum.Value.fromAddressArray(tokens));
+  data.push(ethereum.Value.fromTupleArray(configs));
+  data.push(ethereum.Value.fromUnsignedBigIntArray(balancesRaw));
+  data.push(ethereum.Value.fromUnsignedBigIntArray(balancesRaw));
+  data.push(ethereum.Value.fromUnsignedBigIntArray(tokenRates));
+  data.push(ethereum.Value.fromUnsignedBigIntArray(ones));
+  createMockedFunction(
+    VAULT_ADDRESS,
+    "getPoolData",
+    "getPoolData(address):((bytes32,address[],(uint8,address,bool)[],uint256[],uint256[],uint256[],uint256[]))"
+  )
+    .withArgs([ethereum.Value.fromAddress(pool)])
+    .returns([ethereum.Value.fromTuple(data)]);
+}
+
+export function mockPoolDataReverts(pool: Address): void {
+  createMockedFunction(
+    VAULT_ADDRESS,
+    "getPoolData",
+    "getPoolData(address):((bytes32,address[],(uint8,address,bool)[],uint256[],uint256[],uint256[],uint256[]))"
+  )
+    .withArgs([ethereum.Value.fromAddress(pool)])
+    .reverts();
+}
+
 export function assertBd(actual: BigDecimal, expected: string, label: string): void {
   if (!actual.equals(bd(expected))) {
     throw new Error(label + ": expected " + expected + ", got " + actual.toString());
