@@ -4,7 +4,7 @@
   "scripts": {
     "codegen": "graph codegen --output-dir src/types/",
     "build": "graph build",
-    "test": "graph test"
+    "test": "graph test --version 0.6.0"
   },
   "dependencies": {
     "@graphprotocol/graph-cli": "0.98.1",
