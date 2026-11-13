@@ -28,8 +28,8 @@ on:
         type: choice
         options:
           - all
-          - mainnet
           - sepolia
+          - base
 
 jobs:
   deploy:
