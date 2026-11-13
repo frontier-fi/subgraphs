@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - "subgraphs/**"
+      # Matchstick tests do not change the deployed subgraph.
+      - "!subgraphs/*/tests/**"
+      - "!subgraphs/*/matchstick.yaml"
       - "networks.json"
       - "scripts/**"
   workflow_dispatch:

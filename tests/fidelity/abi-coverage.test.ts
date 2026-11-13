@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  eventNamesFromAbi,
-  extractFunction,
-  handlersFromTemplate,
-  readRepo,
-} from "./helpers/source";
+import { eventNamesFromAbi, handlersFromTemplate, readRepo } from "./helpers/source";
 
 /** ERC20 / unused Vault noise that does not need indexing for fidelity. */
 const VAULT_OK_TO_SKIP = new Set([
@@ -41,40 +36,9 @@ describe("ABI ↔ template handler coverage", () => {
     expect(template.has("AmpUpdateStopped")).toBe(true);
   });
 
-  it("AmpUpdateStarted persists ramp schedule fields", () => {
-    const body = extractFunction(
-      readRepo("subgraphs/pools/src/mappings/amp.ts"),
-      "handleAmpUpdateStarted"
-    )!;
-    expect(body).toMatch(/ampIsUpdating\s*=\s*true/);
-    expect(body).toMatch(
-      /ampStartValue\s*=\s*event\.params\.startValue\.divDecimal\(\s*precision\.toBigDecimal\(\)\s*\)/
-    );
-    expect(body).toMatch(
-      /ampEndValue\s*=\s*event\.params\.endValue\.divDecimal\(\s*precision\.toBigDecimal\(\)\s*\)/
-    );
-    expect(body).toMatch(/ampStartTime\s*=\s*event\.params\.startTime/);
-    expect(body).toMatch(/ampEndTime\s*=\s*event\.params\.endTime/);
-    const amp = readRepo("subgraphs/pools/src/mappings/amp.ts");
-    expect(amp).not.toMatch(/function handleBlock/);
-    expect(amp).toMatch(/function touchPool/);
-    expect(amp).toMatch(/ampIsUpdating\s*=\s*false/);
-    expect(extractFunction(amp, "handleAmpUpdateStarted")!).toMatch(
-      /touchPool\(\s*event\.address\s*\)/
-    );
-    expect(extractFunction(amp, "handleAmpUpdateStopped")!).toMatch(
-      /touchPool\(\s*event\.address\s*\)/
-    );
-    const template = readRepo("subgraphs/pools/template.yaml");
-    expect(template).not.toMatch(/blockHandlers/);
-  });
-
-  it("BufferShares mint and burn use the same BufferShare id scheme", () => {
-    const src = readRepo("subgraphs/vault/src/mappings/vault.ts");
-    const mint = extractFunction(src, "handleBufferSharesMinted")!;
-    const burn = extractFunction(src, "handleBufferSharesBurned")!;
-    expect(mint).toMatch(/buffer\.id\.concat\(\s*event\.params\.to\s*\)/);
-    expect(burn).toMatch(/buffer\.id\.concat\(\s*event\.params\.from\s*\)/);
+  it("declares no block handlers in the pools templates", () => {
+    // Ormi does not document polling block handlers in data source templates.
+    expect(readRepo("subgraphs/pools/template.yaml")).not.toMatch(/blockHandlers/);
   });
 
   it("keeps core vault lifecycle events wired", () => {

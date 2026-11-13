@@ -26,7 +26,8 @@ jobs:
         run: pnpm build:all
 
   test:
-    runs-on: ubuntu-latest
+    # graph-cli only fetches matchstick binaries for Ubuntu 18/20/22.
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v7
 
@@ -49,3 +50,6 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Mapping tests (matchstick)
+        run: pnpm test:mappings

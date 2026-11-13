@@ -9,6 +9,7 @@
     "build:all": "bash scripts/build-all.sh",
     "test": "vitest run",
     "test:fidelity": "vitest run tests/fidelity",
+    "test:mappings": "pnpm generate-manifests && pnpm codegen && pnpm -r --workspace-concurrency=1 test",
     "test:watch": "vitest"
   },
   "prettier": {
