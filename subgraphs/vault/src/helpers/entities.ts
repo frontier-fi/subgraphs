@@ -1,4 +1,4 @@
-import { Address, BigDecimal, BigInt, Bytes } from "@graphprotocol/graph-ts";
+import { Address, BigDecimal, BigInt, Bytes, Value } from "@graphprotocol/graph-ts";
 import {
   Buffer,
   Pool,
@@ -138,34 +138,32 @@ export function createRateProvider(
   rateProvider.save();
 }
 
-/** When a Buffer appears after PoolRegistered, link existing PoolTokens. */
-export function linkBufferToPoolTokens(buffer: Buffer): void {
-  let token = Token.load(buffer.id);
+/**
+ * Set `field` on every PoolToken that holds tokenAddress, and save each parent
+ * Pool so consumers watching Pool see the new link.
+ */
+function linkPoolTokens(tokenAddress: Address, field: string, value: Bytes): void {
+  let token = Token.load(tokenAddress);
   if (!token) return;
 
   let poolTokens = token.poolTokens.load();
   for (let i = 0; i < poolTokens.length; i++) {
     let poolToken = poolTokens[i];
-    poolToken.buffer = buffer.id;
+    poolToken.set(field, Value.fromBytes(value));
     poolToken.save();
     let pool = Pool.load(poolToken.pool);
     if (pool) pool.save();
   }
 }
 
+/** When a Buffer appears after PoolRegistered, link existing PoolTokens. */
+export function linkBufferToPoolTokens(buffer: Buffer): void {
+  linkPoolTokens(changetype<Address>(buffer.id), "buffer", buffer.id);
+}
+
 /** When a Pool is registered, backfill nestedPool on PoolTokens that hold its BPT. */
 export function linkNestedPoolToPoolTokens(poolAddress: Address): void {
-  let token = Token.load(poolAddress);
-  if (!token) return;
-
-  let poolTokens = token.poolTokens.load();
-  for (let i = 0; i < poolTokens.length; i++) {
-    let poolToken = poolTokens[i];
-    poolToken.nestedPool = poolAddress;
-    poolToken.save();
-    let pool = Pool.load(poolToken.pool);
-    if (pool) pool.save();
-  }
+  linkPoolTokens(poolAddress, "nestedPool", poolAddress);
 }
 
 export function loadPoolToken(
