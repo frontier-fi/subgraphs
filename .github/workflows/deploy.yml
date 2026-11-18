@@ -30,6 +30,7 @@ on:
           - all
           - sepolia
           - base
+          - ethereum
 
 jobs:
   deploy:

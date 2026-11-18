@@ -61,9 +61,12 @@ function replacePlaceholders(template, network, networkData) {
     return '';
   });
 
-  let result = template.replace(/{{ network }}/g, network);
-  
+  // The networks.json key names the subgraph (vault-<key>); graphNetwork, when
+  // set, is graph-node's name for the chain (e.g. "mainnet" for ethereum).
+  let result = template.replace(/{{ network }}/g, networkData.graphNetwork || network);
+
   for (const [contractName, contractData] of Object.entries(networkData)) {
+    if (typeof contractData !== 'object' || contractData === null) continue;
     result = result.replace(new RegExp(`{{ ${contractName}\\.address }}`, 'g'), contractData.address);
     result = result.replace(new RegExp(`{{ ${contractName}\\.startBlock }}`, 'g'), contractData.startBlock.toString());
     // Missing storeEventsFrom used to become the literal "undefined" and break Ormi deploy

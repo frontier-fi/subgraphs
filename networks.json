@@ -36,5 +36,25 @@
       "address": "0xED6D268cAdBea94c34E531C3401d41a882D66A8D",
       "startBlock": 56625581
     }
+  },
+  "ethereum": {
+    "graphNetwork": "mainnet",
+    "Vault": {
+      "address": "0xFF00009C1A83Ec25434522ef355b99e9a70000FF",
+      "startBlock": 26444019,
+      "storeEventsFrom": "26444019"
+    },
+    "WeightedPoolFactory": {
+      "address": "0xC55Ea8a9de28CEDd9Eb1384CecD0D0437B71aB9a",
+      "startBlock": 26444061
+    },
+    "StablePoolFactory": {
+      "address": "0xB74Fe587fad28adbf152b511E199665D56D40755",
+      "startBlock": 26444074
+    },
+    "GyroECLPPoolFactory": {
+      "address": "0xED6D268cAdBea94c34E531C3401d41a882D66A8D",
+      "startBlock": 26444086
+    }
   }
 }

@@ -58,6 +58,20 @@ describe("Manifest generation", () => {
     }
   });
 
+  it("uses graphNetwork as the manifest network and the key as the file name", () => {
+    const sepolia = readJson<Record<string, any>>("networks.json").sepolia;
+    const dir = scratchRepo({ ethereum: { graphNetwork: "mainnet", ...sepolia }, sepolia });
+    generate(dir);
+    for (const subgraph of ["vault", "pools"]) {
+      const ethereum = readFileSync(join(dir, `subgraphs/${subgraph}/subgraph.ethereum.yaml`), "utf8");
+      expect(ethereum).toMatch(/network: mainnet\n/);
+      expect(ethereum).not.toMatch(/network: ethereum/);
+      // Without graphNetwork, the key is the network.
+      const plain = readFileSync(join(dir, `subgraphs/${subgraph}/subgraph.sepolia.yaml`), "utf8");
+      expect(plain).toMatch(/network: sepolia\n/);
+    }
+  });
+
   it("skips constants.ts instead of throwing when the network is ambiguous", () => {
     const dir = scratchRepo(twoNonSepoliaNetworks());
     generate(dir);
