@@ -31,6 +31,7 @@ on:
           - sepolia
           - base
           - ethereum
+          - monad
 
 jobs:
   deploy:
